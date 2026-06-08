@@ -3,3 +3,4 @@ aiogram
 openpyxl
 pdfplumber
 python-dotenv
+gunicorn
