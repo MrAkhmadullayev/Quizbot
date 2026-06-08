@@ -1,0 +1,59 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DROPLET_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy application
+        env:
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          DROPLET_USER: ${{ secrets.DROPLET_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "${DROPLET_USER}@${DROPLET_HOST}" 'bash -se' <<'REMOTE'
+            set -euo pipefail
+            cd /srv/quizbot
+
+            exec 9>/tmp/quizbot-deploy.lock
+            flock -n 9 || { echo "Boshqa deploy ishlamoqda"; exit 1; }
+
+            git fetch origin main
+            git merge --ff-only origin/main
+
+            source venv/bin/activate
+            python -m pip install -r requirements.txt
+            python manage.py check
+            python manage.py migrate --noinput
+            python manage.py collectstatic --noinput
+
+            sudo -n systemctl restart quizbot-web.service
+            sudo -n systemctl restart quizbot-bot.service
+
+            systemctl is-active --quiet quizbot-web.service
+            systemctl is-active --quiet quizbot-bot.service
+            echo "Deploy muvaffaqiyatli yakunlandi"
+          REMOTE
