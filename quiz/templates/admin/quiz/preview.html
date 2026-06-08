@@ -1,0 +1,48 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<style>
+  .qcard{border:1px solid #ddd;border-radius:8px;padding:12px 16px;margin:10px 0;background:#fff}
+  .qcard.review{border-color:#e0a800;background:#fffdf3}
+  .qtext{font-weight:600;margin-bottom:8px}
+  .opt{display:block;padding:4px 0}
+  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:#e0a800;color:#000;margin-left:8px}
+  .summary{background:#eef6ff;padding:12px 16px;border-radius:8px;margin-bottom:16px}
+</style>
+
+<div class="summary">
+  Jami <b>{{ total }}</b> ta savol topildi.
+  {% if needs_review %}
+    <span style="color:#a06a00">⚠️ {{ needs_review }} ta savolda to'g'ri javob belgilanmagan — pastda <span class="badge">Tekshirish kerak</span> bilan ajratilgan, ularni belgilang.</span>
+  {% else %}
+    Barcha to'g'ri javoblar aniqlangan.
+  {% endif %}
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  {% for g in groups %}
+    <h2 style="margin-top:24px">📚 {{ g.test }} — {{ g.subtest }} ({{ g.questions|length }} savol)</h2>
+    {% for q in g.questions %}
+      <div class="qcard {% if q.needs_review %}review{% endif %}">
+        <div class="qtext">
+          {{ forloop.counter }}. {{ q.text }}
+          {% if q.needs_review %}<span class="badge">Tekshirish kerak</span>{% endif %}
+        </div>
+        {% for opt in q.options %}
+          <label class="opt">
+            <input type="radio" name="correct_{{ q.gi }}_{{ q.qi }}" value="{{ forloop.counter0 }}"
+              required
+              {% if q.correct_default == forloop.counter0 %}checked{% endif %}>
+            {{ opt.text }}
+          </label>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  <div class="submit-row" style="position:sticky;bottom:0;background:#fff;padding:12px 0">
+    <input type="submit" value="✅ Saqlash (submit)" class="default">
+    <a href="{% url 'admin:quiz_upload' %}" class="button">Bekor qilish</a>
+  </div>
+</form>
+{% endblock %}

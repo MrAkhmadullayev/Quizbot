@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div style="max-width:680px">
+  <p style="background:#f6f6f6;padding:12px;border-radius:8px;line-height:1.5">
+    <b>Qo'llab-quvvatlanadigan formatlar:</b><br>
+    • <b>Excel (.xlsx)</b> — ustunlar: <code>Test, SubTest, Question, Option1..4, Correct</code>
+      (Test/Qism nomi faylning o'zida bo'ladi).<br>
+    • <b>PDF / TXT</b> — <code>?</code> bilan savol, <code>=</code> bilan variant,
+      <code>+</code> bilan to'g'ri javob. Bu holatda Test va Qism nomini quyida kiriting.
+  </p>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row">
+        <label for="file"><b>Fayl:</b></label>
+        <input type="file" name="file" id="file" accept=".xlsx,.pdf,.txt" required>
+      </div>
+      <div class="form-row">
+        <label for="test_name">Test nomi <span style="color:#888">(PDF/TXT uchun):</span></label>
+        <input type="text" name="test_name" id="test_name" placeholder="Masalan: Web Programming 2025">
+      </div>
+      <div class="form-row">
+        <label for="subtest_name">Qism nomi <span style="color:#888">(PDF/TXT uchun):</span></label>
+        <input type="text" name="subtest_name" id="subtest_name" placeholder="Masalan: 1-qism">
+      </div>
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="Parse qilish va ko'rib chiqish" class="default">
+    </div>
+  </form>
+</div>
+{% endblock %}

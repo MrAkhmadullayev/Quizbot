@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Django
+*.log
+.env
+
+# Local DB & uploaded files (yonida lokal saqlanadi)
+data/db.sqlite3
+data/uploads/
+
+# OS
+.DS_Store
+Thumbs.db
