@@ -1,6 +1,11 @@
-Django
-aiogram
-openpyxl
-pdfplumber
-python-dotenv
-gunicorn
+# Versiyalar pinlangan — har deploy bir xil va sinalgan muhitda ishlaydi.
+Django>=6.0,<6.1
+aiogram>=3.28,<4
+openpyxl>=3.1,<4
+pdfplumber>=0.11,<0.12
+python-dotenv>=1.2,<2
+gunicorn>=26,<27
+
+# Production PostgreSQL uchun
+psycopg[binary]>=3.3,<4
+dj-database-url>=3.1,<4

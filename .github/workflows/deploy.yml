@@ -42,7 +42,10 @@ jobs:
             flock -n 9 || { echo "Boshqa deploy ishlamoqda"; exit 1; }
 
             git fetch origin main
-            git merge --ff-only origin/main
+            # Serverni origin/main ga majburan tenglaymiz. data/sql/ (baza) va
+            # boshqa gitignore qilingan fayllarga TEGMAYDI — faqat kuzatilgan
+            # fayllar yangilanadi. Bu '-shm/-wal' merge konfliktini yo'qotadi.
+            git reset --hard origin/main
 
             source venv/bin/activate
             python -m pip install -r requirements.txt

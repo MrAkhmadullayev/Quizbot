@@ -6,8 +6,10 @@ xavfsiz (hash'langan) auth tizimi orqali saqlaydi. Kirish faqat
 """
 from functools import wraps
 
+from django.conf import settings
 from django.core.cache import cache
 from django.shortcuts import redirect
+from django.utils.http import url_has_allowed_host_and_scheme
 
 LOGIN_PATH = "/dashboard/login/"
 
@@ -17,9 +19,16 @@ LOCKOUT_SECONDS = 300  # 5 daqiqa
 
 
 def get_client_ip(request):
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Mijoz IP'sini aniqlaydi.
+
+    X-Forwarded-For faqat ishonchli proxy (nginx) orqasida o'qiladi —
+    aks holda mijoz bu headerni soxtalashtirib login-lockout'ni
+    cheksiz aylanib o'tishi mumkin.
+    """
+    if getattr(settings, "TRUST_PROXY", False):
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR", "0.0.0.0")
 
 
@@ -33,15 +42,14 @@ def is_locked_out(ip):
 
 def register_failed_attempt(ip):
     key = _fail_key(ip)
+    # add atomik: kalit yo'q bo'lsa TTL bilan yaratadi, bor bo'lsa incr
+    if cache.add(key, 1, LOCKOUT_SECONDS):
+        return 1
     try:
-        count = cache.incr(key)
+        return cache.incr(key)
     except ValueError:
         cache.set(key, 1, LOCKOUT_SECONDS)
-        count = 1
-    # incr TTL'ni saqlamaydi, shuning uchun qayta o'rnatamiz
-    if count == 1:
-        cache.set(key, 1, LOCKOUT_SECONDS)
-    return count
+        return 1
 
 
 def reset_attempts(ip):
@@ -54,7 +62,11 @@ def can_access(user):
 
 def is_safe_next(url):
     """Ochiq qayta yo'naltirishning oldini olish — faqat ichki /dashboard yo'llari."""
-    return bool(url) and url.startswith("/dashboard") and "//" not in url[1:]
+    return (
+        bool(url)
+        and url.startswith("/dashboard")
+        and url_has_allowed_host_and_scheme(url, allowed_hosts=None)
+    )
 
 
 def dashboard_login_required(view):

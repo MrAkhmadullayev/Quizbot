@@ -176,6 +176,13 @@ class QuizSession(models.Model):
         verbose_name = "Sessiya"
         verbose_name_plural = "Sessiyalar (tarix)"
         ordering = ["-started_at"]
+        indexes = [
+            # Tarix sahifasi uchun issiq yo'l: user + mode bo'yicha so'nggilar
+            models.Index(
+                fields=["user", "mode", "-started_at"],
+                name="session_user_mode_started",
+            ),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(current_index__lte=models.F("total")),

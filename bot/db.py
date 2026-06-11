@@ -1,7 +1,9 @@
 """Django ORM bilan xavfsiz async ishlash uchun yordamchilar."""
+import functools
+
 from asgiref.sync import sync_to_async
-from django.db import IntegrityError, transaction
-from django.db.models import Count, Exists, OuterRef, Prefetch, Q
+from django.db import IntegrityError, close_old_connections, transaction
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 
 from quiz.models import (
@@ -20,6 +22,35 @@ from quiz.models import (
 
 class QuizOperationError(Exception):
     """Foydalanuvchiga ko'rsatish mumkin bo'lgan quiz operatsiyasi xatosi."""
+
+
+def db_task(func):
+    """Sync ORM funksiyani thread-pool'da ishlaydigan async funksiyaga o'raydi.
+
+    thread_sensitive=False — har bir chaqiruv pooldagi alohida ishchi
+    thread'da bajariladi. thread_sensitive=True bo'lsa BARCHA so'rovlar
+    bitta umumiy thread orqali navbatga tushadi va yuk ostida bot qotadi.
+    Har bir funksiya o'z ichida yaxlit (bitta tranzaksiya) bo'lgani uchun
+    parallel bajarish xavfsiz.
+
+    close_old_connections — har thread eskirgan/yaroqsiz DB ulanishini
+    qayta ishlatmasligi uchun chaqiruvdan oldin va keyin tozalaydi.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        close_old_connections()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            close_old_connections()
+    return sync_to_async(wrapper, thread_sensitive=False)
+
+
+def _clip(value, limit):
+    """Postgres'da varchar limitidan oshib xato bermasligi uchun kesadi."""
+    if value is None:
+        return None
+    return str(value)[:limit]
 
 
 def _playable_questions(subtest_id=None):
@@ -45,19 +76,19 @@ def _registered_user(user_id):
 
 
 # ---------------- Foydalanuvchi ----------------
-@sync_to_async(thread_sensitive=True)
+@db_task
 def get_user(tg_id):
     return TelegramUser.objects.filter(tg_id=tg_id).first()
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def create_user(tg_id, username, full_name, phone):
     user, _ = TelegramUser.objects.update_or_create(
         tg_id=tg_id,
         defaults={
-            "username": username,
-            "full_name": full_name,
-            "phone": phone,
+            "username": _clip(username, 255),
+            "full_name": _clip(full_name, 255) or "",
+            "phone": _clip(phone, 32) or "",
         },
     )
     return user
@@ -77,7 +108,7 @@ def _playable_test_qs():
     )
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def list_groups():
     """Ishlashga tayyor testi bor faol guruhlar."""
     playable_ids = _playable_test_qs().values_list("id", flat=True)
@@ -88,12 +119,12 @@ def list_groups():
     )
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def get_group(group_id):
     return TestGroup.objects.filter(id=group_id, is_active=True).first()
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def list_group_tests(group_id):
     """Tanlangan guruhga biriktirilgan, ishlashga tayyor testlar."""
     return list(
@@ -102,12 +133,12 @@ def list_group_tests(group_id):
 
 
 # ---------------- Testlar ----------------
-@sync_to_async(thread_sensitive=True)
+@db_task
 def list_tests():
     return list(_playable_test_qs())
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def list_subtests(test_id):
     subtests = list(
         SubTest.objects.filter(
@@ -115,23 +146,26 @@ def list_subtests(test_id):
             test__is_active=True,
             is_active=True,
         )
-        .prefetch_related(
-            Prefetch(
-                "questions",
-                queryset=_playable_questions(),
-                to_attr="_playable_questions",
-            )
-        )
+    )
+    # Savol matnlarini yuklamasdan faqat sonini olamiz (yengil so'rov)
+    playable_ids = _playable_questions().filter(
+        subtest__test_id=test_id
+    ).values_list("id", flat=True)
+    counts = dict(
+        Question.objects.filter(id__in=playable_ids)
+        .values_list("subtest_id")
+        .annotate(total=Count("id"))
+        .values_list("subtest_id", "total")
     )
     result = []
     for subtest in subtests:
-        subtest.question_total = len(subtest._playable_questions)
+        subtest.question_total = counts.get(subtest.id, 0)
         if subtest.question_total:
             result.append(subtest)
     return result
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def get_subtest(subtest_id):
     return (
         SubTest.objects.select_related("test")
@@ -140,7 +174,7 @@ def get_subtest(subtest_id):
     )
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def subtest_question_count(subtest_id):
     return _playable_questions(subtest_id).count()
 
@@ -169,7 +203,7 @@ def _session_question(session, index):
     }
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def get_session_question(session_id, index):
     session = QuizSession.objects.filter(id=session_id).first()
     if not session:
@@ -178,7 +212,7 @@ def get_session_question(session_id, index):
 
 
 # ---------------- Sessiyalar ----------------
-@sync_to_async(thread_sensitive=True)
+@db_task
 @transaction.atomic
 def create_session(user_id, subtest_id, mode, chat_id=None):
     user = _registered_user(user_id)
@@ -222,7 +256,7 @@ def create_session(user_id, subtest_id, mode, chat_id=None):
     )
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def get_session(session_id):
     return (
         QuizSession.objects.select_related("subtest", "user")
@@ -231,7 +265,7 @@ def get_session(session_id):
     )
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 @transaction.atomic
 def record_solo_answer(session_id, option_id, tg_id):
     session = (
@@ -253,11 +287,13 @@ def record_solo_answer(session_id, option_id, tg_id):
         raise QuizOperationError("Joriy savol topilmadi.")
     question = data["question"]
 
-    selected = Option.objects.filter(id=option_id, question=question).first()
+    # Variantlar _session_question'da yuklangan — qo'shimcha so'rov kerak emas
+    options = data["options"]
+    selected = next((opt for opt in options if opt.id == option_id), None)
     if not selected:
         raise QuizOperationError("Bu tugma eskirgan. Joriy savolga javob bering.")
 
-    correct = Option.objects.filter(question=question, is_correct=True).first()
+    correct = next((opt for opt in options if opt.is_correct), None)
     if not correct:
         raise QuizOperationError("Savolning to'g'ri javobi belgilanmagan.")
 
@@ -298,7 +334,7 @@ def record_solo_answer(session_id, option_id, tg_id):
     }
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 @transaction.atomic
 def finish_solo_session(session_id, tg_id):
     session = (
@@ -318,7 +354,7 @@ def finish_solo_session(session_id, tg_id):
     return {"score": session.score, "total": session.total}
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def user_history(user_id, limit=10):
     solo = list(
         QuizSession.objects.select_related("subtest", "subtest__test")
@@ -326,17 +362,15 @@ def user_history(user_id, limit=10):
         .order_by("-started_at")[:limit]
     )
 
-    group_ids = set(
+    # Faqat eng so'nggi `limit` ta guruh sessiyasi (chegarasiz yuklamaslik uchun)
+    group_ids = list(
         QuizSession.objects.filter(
-            user_id=user_id,
+            Q(user_id=user_id) | Q(answers__user_id=user_id),
             mode=QuizSession.GROUP,
-        ).values_list("id", flat=True)
-    )
-    group_ids.update(
-        Answer.objects.filter(
-            user_id=user_id,
-            session__mode=QuizSession.GROUP,
-        ).values_list("session_id", flat=True)
+        )
+        .order_by("-started_at")
+        .distinct()
+        .values_list("id", flat=True)[:limit]
     )
     groups = list(
         QuizSession.objects.select_related("subtest", "subtest__test")
@@ -382,7 +416,7 @@ def user_history(user_id, limit=10):
 
 
 # ---------------- Guruh ----------------
-@sync_to_async(thread_sensitive=True)
+@db_task
 def get_group_control(session_id, tg_id):
     session = (
         QuizSession.objects.select_related("user")
@@ -404,7 +438,7 @@ def get_group_control(session_id, tg_id):
     }
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def prepare_group_question(session_id, index):
     session = QuizSession.objects.filter(
         id=session_id,
@@ -436,7 +470,7 @@ def prepare_group_question(session_id, index):
     }
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 @transaction.atomic
 def save_group_poll(poll_id, message_id, session_id, question_id, option_map, index):
     session = (
@@ -471,7 +505,7 @@ def save_group_poll(poll_id, message_id, session_id, question_id, option_map, in
     return poll
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 @transaction.atomic
 def close_group_poll(session_id, question_id):
     poll = (
@@ -496,7 +530,7 @@ def close_group_poll(session_id, question_id):
     }
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 @transaction.atomic
 def record_group_answer(poll_id, option_index, tg_id, username, full_name):
     poll = (
@@ -509,19 +543,20 @@ def record_group_answer(poll_id, option_index, tg_id, username, full_name):
         return None
 
     option_id = poll.option_map.get(str(option_index))
-    selected = Option.objects.filter(id=option_id, question=poll.question).first()
+    options = list(Option.objects.filter(question=poll.question))
+    selected = next((opt for opt in options if opt.id == option_id), None)
     if not selected:
         return None
 
-    correct = Option.objects.filter(question=poll.question, is_correct=True).first()
+    correct = next((opt for opt in options if opt.is_correct), None)
     if not correct:
         return None
 
     user, _ = TelegramUser.objects.update_or_create(
         tg_id=tg_id,
         defaults={
-            "username": username,
-            "full_name": full_name,
+            "username": _clip(username, 255),
+            "full_name": _clip(full_name, 255) or "",
         },
     )
     answer, _ = Answer.objects.update_or_create(
@@ -536,7 +571,7 @@ def record_group_answer(poll_id, option_index, tg_id, username, full_name):
     return {"is_correct": answer.is_correct, "user_id": user.id}
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def group_leaderboard(session_id):
     rows = (
         Answer.objects.filter(session_id=session_id, user__isnull=False)
@@ -550,7 +585,7 @@ def group_leaderboard(session_id):
     return list(rows)
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 @transaction.atomic
 def finish_group_session(session_id, tg_id):
     session = (
@@ -574,7 +609,7 @@ def finish_group_session(session_id, tg_id):
     return {"chat_id": session.chat_id}
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 @transaction.atomic
 def cancel_session(session_id):
     QuizSession.objects.filter(
@@ -586,7 +621,7 @@ def cancel_session(session_id):
     )
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def register_group(chat_id, title, added_by_tg_id):
     user = (
         TelegramUser.objects.filter(tg_id=added_by_tg_id)
@@ -598,19 +633,19 @@ def register_group(chat_id, title, added_by_tg_id):
     KnownGroup.objects.update_or_create(
         chat_id=chat_id,
         defaults={
-            "title": title,
+            "title": _clip(title, 255) or "",
             "added_by": user,
             "is_active": True,
         },
     )
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def deactivate_group(chat_id):
     KnownGroup.objects.filter(chat_id=chat_id).update(is_active=False)
 
 
-@sync_to_async(thread_sensitive=True)
+@db_task
 def list_user_groups(user_id):
     return list(
         KnownGroup.objects.filter(

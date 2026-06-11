@@ -26,16 +26,24 @@ def _alert_text(value, limit=190):
 def _parse_id_group(data):
     """`prefix:id` yoki `prefix:id:group_id` ni (id, group_id) ga ajratadi.
 
-    group_id bo'lmasa None qaytaradi (eski oqim bilan moslik uchun)."""
+    group_id bo'lmasa None qaytaradi (eski oqim bilan moslik uchun).
+    Soxta/yaroqsiz callback_data uchun (None, None) — handler'lar tekshiradi.
+    """
     parts = data.split(":")
-    main_id = int(parts[1])
-    group_id = int(parts[2]) if len(parts) > 2 and parts[2] else None
+    try:
+        main_id = int(parts[1])
+        group_id = int(parts[2]) if len(parts) > 2 and parts[2] else None
+    except (IndexError, ValueError):
+        return None, None
     return main_id, group_id
 
 
 @router.callback_query(F.data.startswith("test:"))
 async def show_subtests(cb: CallbackQuery):
     test_id, group_id = _parse_id_group(cb.data)
+    if test_id is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
     subs = await db.list_subtests(test_id)
     if not subs:
         await cb.answer(
@@ -53,6 +61,9 @@ async def show_subtests(cb: CallbackQuery):
 @router.callback_query(F.data.startswith("sub:"))
 async def show_start_modes(cb: CallbackQuery):
     sub_id, group_id = _parse_id_group(cb.data)
+    if sub_id is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
     sub = await db.get_subtest(sub_id)
     if not sub:
         await cb.answer("Test qismi topilmadi.", show_alert=True)
@@ -79,6 +90,9 @@ async def show_start_modes(cb: CallbackQuery):
 @router.callback_query(F.data.startswith("backsub:"))
 async def back_to_subtests(cb: CallbackQuery):
     sub_id, group_id = _parse_id_group(cb.data)
+    if sub_id is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
     sub = await db.get_subtest(sub_id)
     if not sub:
         await cb.answer("Test qismi topilmadi.", show_alert=True)
@@ -93,7 +107,10 @@ async def back_to_subtests(cb: CallbackQuery):
 
 @router.callback_query(F.data.startswith("solo:"))
 async def start_solo(cb: CallbackQuery):
-    sub_id = int(cb.data.split(":")[1])
+    sub_id, _ = _parse_id_group(cb.data)
+    if sub_id is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
     user = await db.get_user(cb.from_user.id)
     if not user or not user.phone:
         await cb.answer(
@@ -136,11 +153,16 @@ async def _send_solo_question(cb, session_id, index, total):
 
 @router.callback_query(F.data.startswith("ans:"))
 async def answer_solo(cb: CallbackQuery):
-    _, session_id, option_id = cb.data.split(":")
+    parts = cb.data.split(":")
+    try:
+        session_id, option_id = int(parts[1]), int(parts[2])
+    except (IndexError, ValueError):
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
     try:
         result = await db.record_solo_answer(
-            int(session_id),
-            int(option_id),
+            session_id,
+            option_id,
             cb.from_user.id,
         )
     except db.QuizOperationError as exc:
@@ -181,7 +203,7 @@ async def answer_solo(cb: CallbackQuery):
 
     await _send_solo_question(
         cb,
-        int(session_id),
+        session_id,
         result["next_index"],
         result["total"],
     )
@@ -189,7 +211,10 @@ async def answer_solo(cb: CallbackQuery):
 
 @router.callback_query(F.data.startswith("end:"))
 async def end_solo(cb: CallbackQuery):
-    session_id = int(cb.data.split(":")[1])
+    session_id, _ = _parse_id_group(cb.data)
+    if session_id is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
     try:
         result = await db.finish_solo_session(
             session_id,

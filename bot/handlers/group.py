@@ -1,7 +1,7 @@
 """Guruhda native Telegram quiz poll orqali test ishlash logikasi."""
 import asyncio
 import logging
-from collections import defaultdict
+from contextlib import asynccontextmanager
 from html import escape
 
 from aiogram import Bot, F, Router
@@ -20,6 +20,7 @@ from aiogram.types import (
 )
 
 from bot import db
+from bot.config import BOT_USERNAME
 from bot.keyboards import back_kb, group_control_kb
 
 router = Router()
@@ -27,12 +28,57 @@ logger = logging.getLogger(__name__)
 
 MAX_Q_LEN = 290
 MAX_OPT_LEN = 95
-_session_locks = defaultdict(asyncio.Lock)
+
+
+class _SessionLocks:
+    """Sessiya bo'yicha asyncio.Lock — ishlatilmay qolgani avtomatik o'chiriladi.
+
+    defaultdict ishlatilsa har bir (shu jumladan yolg'on) session_id uchun
+    lock xotirada abadiy qolib ketadi. Bu yerda oxirgi foydalanuvchi
+    qo'yib yuborganda yozuv o'chiriladi — xotira chegaralangan.
+    """
+
+    def __init__(self):
+        self._locks: dict[int, tuple[asyncio.Lock, int]] = {}
+
+    @asynccontextmanager
+    async def hold(self, session_id):
+        lock, refs = self._locks.get(session_id, (None, 0))
+        if lock is None:
+            lock = asyncio.Lock()
+        self._locks[session_id] = (lock, refs + 1)
+        try:
+            async with lock:
+                yield
+        finally:
+            lock, refs = self._locks[session_id]
+            if refs <= 1:
+                del self._locks[session_id]
+            else:
+                self._locks[session_id] = (lock, refs - 1)
+
+
+_session_locks = _SessionLocks()
 
 
 def _alert_text(value, limit=190):
     value = str(value)
     return value if len(value) <= limit else value[:limit - 1] + "…"
+
+
+def _callback_ints(data, count):
+    """`prefix:a:b` callback'dan butun sonlarni xavfsiz ajratadi.
+
+    Telegram callback_data'ni istalgan mijoz soxtalashtirishi mumkin —
+    int() xatosi handler'ni yiqitmasligi kerak. Mos kelmasa None.
+    """
+    parts = data.split(":")
+    if len(parts) != count + 1:
+        return None
+    try:
+        return [int(part) for part in parts[1:]]
+    except ValueError:
+        return None
 
 
 def _message_chunks(lines, limit=3900):
@@ -74,7 +120,11 @@ async def bot_removed_from_group(event: ChatMemberUpdated):
 
 @router.callback_query(F.data.startswith("group:"))
 async def choose_group(cb: CallbackQuery):
-    sub_id = int(cb.data.split(":")[1])
+    parsed = _callback_ints(cb.data, 1)
+    if parsed is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
+    (sub_id,) = parsed
     user = await db.get_user(cb.from_user.id)
     if not user or not user.phone:
         await cb.answer(
@@ -93,8 +143,6 @@ async def choose_group(cb: CallbackQuery):
         ]
         for group in groups
     ]
-
-    from bot.config import BOT_USERNAME
 
     rows.append([
         InlineKeyboardButton(
@@ -127,7 +175,11 @@ async def choose_group(cb: CallbackQuery):
 
 @router.callback_query(F.data.startswith("gstart:"))
 async def start_group(cb: CallbackQuery, bot: Bot):
-    _, sub_id, chat_id = cb.data.split(":")
+    parsed = _callback_ints(cb.data, 2)
+    if parsed is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
+    sub_id, chat_id = parsed
     user = await db.get_user(cb.from_user.id)
     if not user or not user.phone:
         await cb.answer(
@@ -140,13 +192,17 @@ async def start_group(cb: CallbackQuery, bot: Bot):
     try:
         session = await db.create_session(
             user.id,
-            int(sub_id),
+            sub_id,
             mode="group",
-            chat_id=int(chat_id),
+            chat_id=chat_id,
         )
-        subtest = await db.get_subtest(int(sub_id))
+        subtest = await db.get_subtest(sub_id)
+        if subtest is None:
+            raise db.QuizOperationError(
+                "Bu test qismi topilmadi yoki faol emas."
+            )
         await bot.send_message(
-            int(chat_id),
+            chat_id,
             (
                 f"🎮 <b>{escape(subtest.test.name)} / "
                 f"{escape(subtest.name)}</b> boshlandi!\n"
@@ -160,7 +216,6 @@ async def start_group(cb: CallbackQuery, bot: Bot):
     except db.QuizOperationError as exc:
         if session:
             await db.cancel_session(session.id)
-            _session_locks.pop(session.id, None)
         await cb.answer(
             _alert_text(exc),
             show_alert=True,
@@ -170,7 +225,6 @@ async def start_group(cb: CallbackQuery, bot: Bot):
         logger.exception("Guruh testini boshlashda kutilmagan xato")
         if session:
             await db.cancel_session(session.id)
-            _session_locks.pop(session.id, None)
         await cb.answer(
             "Guruh testini boshlashda texnik xato yuz berdi.",
             show_alert=True,
@@ -260,9 +314,12 @@ async def _close_telegram_poll(bot, poll):
 
 @router.callback_query(F.data.startswith("gnext:"))
 async def group_next(cb: CallbackQuery, bot: Bot):
-    _, session_id, question_id = cb.data.split(":")
-    session_id = int(session_id)
-    async with _session_locks[session_id]:
+    parsed = _callback_ints(cb.data, 2)
+    if parsed is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
+    session_id, question_id = parsed
+    async with _session_locks.hold(session_id):
         try:
             control = await db.get_group_control(
                 session_id,
@@ -273,11 +330,11 @@ async def group_next(cb: CallbackQuery, bot: Bot):
 
             closed = await db.close_group_poll(
                 session_id,
-                int(question_id),
+                question_id,
             )
             if (
                 not closed
-                and control["current_question_id"] != int(question_id)
+                and control["current_question_id"] != question_id
             ):
                 raise db.QuizOperationError(
                     "Bu boshqaruv tugmasi allaqachon ishlatilgan."
@@ -311,14 +368,17 @@ async def group_next(cb: CallbackQuery, bot: Bot):
 
 @router.callback_query(F.data.startswith("gend:"))
 async def group_end(cb: CallbackQuery, bot: Bot):
-    _, session_id, question_id = cb.data.split(":")
-    session_id = int(session_id)
-    async with _session_locks[session_id]:
+    parsed = _callback_ints(cb.data, 2)
+    if parsed is None:
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
+    session_id, question_id = parsed
+    async with _session_locks.hold(session_id):
         try:
             await db.get_group_control(session_id, cb.from_user.id)
             closed = await db.close_group_poll(
                 session_id,
-                int(question_id),
+                question_id,
             )
             await _close_telegram_poll(bot, closed)
             await _finish_group(bot, session_id, cb.from_user.id)
@@ -358,4 +418,3 @@ async def _finish_group(bot, session_id, owner_tg_id):
 
     for chunk in _message_chunks(lines):
         await bot.send_message(result["chat_id"], chunk)
-    _session_locks.pop(session_id, None)

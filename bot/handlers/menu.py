@@ -3,6 +3,7 @@ from html import escape
 
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
+from django.utils import timezone
 
 from bot import db, texts
 from bot.keyboards import main_menu_kb, back_kb, tests_kb, groups_kb
@@ -42,7 +43,11 @@ async def groups(cb: CallbackQuery):
 
 @router.callback_query(F.data.startswith("grp:"))
 async def group_tests(cb: CallbackQuery):
-    group_id = int(cb.data.split(":")[1])
+    try:
+        group_id = int(cb.data.split(":")[1])
+    except (IndexError, ValueError):
+        await cb.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
     group = await db.get_group(group_id)
     if not group:
         await cb.answer("Guruh topilmadi yoki faol emas.", show_alert=True)
@@ -80,7 +85,7 @@ async def history(cb: CallbackQuery):
     lines = ["🕘 <b>Test tarixi</b> (oxirgi 10 ta):\n"]
     status_emoji = {"finished": "✅", "active": "⏳", "cancelled": "❌"}
     for session in sessions:
-        date = session["started_at"].strftime("%d.%m.%Y %H:%M")
+        date = timezone.localtime(session["started_at"]).strftime("%d.%m.%Y %H:%M")
         emo = status_emoji.get(session["status"], "•")
         mode = "👥" if session["mode"] == "group" else "🤖"
         lines.append(

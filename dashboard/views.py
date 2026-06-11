@@ -29,6 +29,8 @@ from .security import (
 UPLOAD_SESSION_KEY = "dash_upload_groups"
 UPLOAD_GROUP_KEY = "dash_upload_group_id"
 ALLOWED_SUFFIXES = {".xlsx", ".pdf", ".txt"}
+# Bir yuklashdagi maksimal savollar — session storage'ni himoya qiladi
+MAX_IMPORT_QUESTIONS = 5000
 
 
 # ----------------------------- Auth -----------------------------
@@ -162,6 +164,13 @@ def upload(request):
         total_q = sum(len(g["questions"]) for g in groups)
         if total_q == 0:
             messages.error(request, "Fayldan savol topilmadi. Formatni tekshiring.")
+            return redirect("dashboard:upload")
+        if total_q > MAX_IMPORT_QUESTIONS:
+            messages.error(
+                request,
+                f"Bir yuklashda ko'pi bilan {MAX_IMPORT_QUESTIONS} ta savol "
+                f"import qilish mumkin (faylda {total_q} ta). Faylni bo'ling.",
+            )
             return redirect("dashboard:upload")
 
         errors = services.validate_groups(groups, require_correct=False)
