@@ -31,38 +31,63 @@ def back_kb(target="menu:main"):
     ])
 
 
-def tests_kb(tests):
+def groups_kb(groups):
+    """'Test ishlash' bosilganda chiqadigan guruhlar ro'yxati."""
     rows = [
         [
             InlineKeyboardButton(
-                text=_button_text(t.name),
-                callback_data=f"test:{t.id}",
+                text=_button_text(f"📚 {g.name}"),
+                callback_data=f"grp:{g.id}",
             )
         ]
-        for t in tests
+        for g in groups
     ]
     rows.append([InlineKeyboardButton(text="⬅️ Orqaga", callback_data="menu:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def subtests_kb(test_id, subtests):
+def _suffix(group_id):
+    """Guruh konteksti bo'lsa callback'ga qo'shimcha qism qaytaradi."""
+    return f":{group_id}" if group_id is not None else ""
+
+
+def tests_kb(tests, group_id=None):
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=_button_text(t.name),
+                callback_data=f"test:{t.id}{_suffix(group_id)}",
+            )
+        ]
+        for t in tests
+    ]
+    # Orqaga: guruh konteksti bo'lsa guruhlar ro'yxatiga, bo'lmasa menyuga
+    back = "menu:tests" if group_id is not None else "menu:main"
+    rows.append([InlineKeyboardButton(text="⬅️ Orqaga", callback_data=back)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def subtests_kb(test_id, subtests, group_id=None):
     rows = []
     for s in subtests:
         rows.append([InlineKeyboardButton(
             text=_button_text(f"{s.name} ({s.question_total} ta)"),
-            callback_data=f"sub:{s.id}",
+            callback_data=f"sub:{s.id}{_suffix(group_id)}",
         )])
-    rows.append([InlineKeyboardButton(text="⬅️ Orqaga", callback_data="menu:tests")])
+    # Orqaga: guruh testlari ro'yxatiga (yoki eski oqimda testlar ro'yxatiga)
+    back = f"grp:{group_id}" if group_id is not None else "menu:tests"
+    rows.append([InlineKeyboardButton(text="⬅️ Orqaga", callback_data=back)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def start_modes_kb(subtest_id):
+def start_modes_kb(subtest_id, group_id=None):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🤖 Botda (yakka) boshlash",
                               callback_data=f"solo:{subtest_id}")],
         [InlineKeyboardButton(text="👥 Guruhda boshlash",
                               callback_data=f"group:{subtest_id}")],
-        [InlineKeyboardButton(text="⬅️ Orqaga", callback_data=f"backsub:{subtest_id}")],
+        [InlineKeyboardButton(text="⬅️ Orqaga",
+                              callback_data=f"backsub:{subtest_id}{_suffix(group_id)}")],
     ])
 
 

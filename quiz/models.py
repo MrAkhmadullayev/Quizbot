@@ -47,6 +47,36 @@ class Test(models.Model):
         return self.name
 
 
+class TestGroup(models.Model):
+    """Testlarni guruhlash uchun (fan / sinf / yo'nalish).
+
+    Foydalanuvchi "Test ishlash" -> avval guruhni tanlaydi -> shu guruhga
+    biriktirilgan testlar ro'yxati chiqadi. Bir test bir nechta guruhda
+    ko'rinishi mumkin (ManyToMany).
+
+    Diqqat: bu Telegram chat guruhi (KnownGroup) emas — bu test kategoriyasi.
+    """
+    name = models.CharField("Guruh nomi", max_length=255, unique=True)
+    description = models.TextField("Tavsif", blank=True)
+    order = models.PositiveIntegerField("Tartib", default=0)
+    is_active = models.BooleanField("Faol", default=True)
+    tests = models.ManyToManyField(
+        "Test",
+        related_name="groups",
+        blank=True,
+        verbose_name="Testlar",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Guruh"
+        verbose_name_plural = "Guruhlar"
+        ordering = ["order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 class SubTest(models.Model):
     """Test ichidagi qism (masalan: 1-qism, 2-qism ...)."""
     test = models.ForeignKey(Test, related_name="subtests", on_delete=models.CASCADE)

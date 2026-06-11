@@ -1,0 +1,46 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{% if test %}Testni tahrirlash{% else %}Yangi test{% endif %}{% endblock %}
+{% block page_title %}{% if test %}Testni tahrirlash{% else %}Yangi test{% endif %}{% endblock %}
+{% block content %}
+<p class="page-sub" style="margin-bottom:18px">
+  <a href="{% url 'dashboard:tests' %}" class="muted">Testlar</a> ›
+  {% if test %}{{ test.name }}{% else %}Yangi{% endif %}
+</p>
+
+<form method="post" style="max-width:640px">
+  {% csrf_token %}
+  <div class="card card-pad">
+    <div class="field">
+      <label for="name">Test nomi</label>
+      <input class="input" type="text" name="name" id="name" value="{{ test.name|default:'' }}" required autofocus>
+    </div>
+    <div class="field">
+      <label for="description">Tavsif <span class="subtle">(ixtiyoriy)</span></label>
+      <textarea class="input" name="description" id="description" rows="2">{{ test.description|default:'' }}</textarea>
+    </div>
+    <div class="field">
+      <div class="checkbox-row">
+        <input type="checkbox" name="is_active" id="is_active" {% if not test or test.is_active %}checked{% endif %}>
+        <label for="is_active" style="margin:0">Faol (botda ko'rinsin)</label>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>Guruhlar</label>
+      {% if all_groups %}
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:6px">
+          {% for g in all_groups %}
+            <label class="checkbox-row" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px">
+              <input type="checkbox" name="groups" value="{{ g.id }}" {% if g.id in selected_groups %}checked{% endif %}>
+              <span>{{ g.name }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      {% else %}<div class="hint">Hali guruh yo'q.</div>{% endif %}
+    </div>
+  </div>
+  <div class="sticky-actions">
+    <button class="btn btn-primary" type="submit">Saqlash</button>
+    <a href="{% if test %}{% url 'dashboard:test_detail' test.id %}{% else %}{% url 'dashboard:tests' %}{% endif %}" class="btn">Bekor qilish</a>
+  </div>
+</form>
+{% endblock %}

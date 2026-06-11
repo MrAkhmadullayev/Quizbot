@@ -1,0 +1,85 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+<h2 class="page-title">Umumiy ko'rsatkichlar</h2>
+<p class="page-sub">Tizimdagi testlar, foydalanuvchilar va sessiyalar bo'yicha jonli statistika.</p>
+
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="label"><span class="dot blue"></span>Foydalanuvchilar</div>
+    <div class="value num">{{ kpi.users }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot"></span>Testlar</div>
+    <div class="value num">{{ kpi.tests }}</div>
+    <div class="sub">{{ kpi.subtests }} qism · {{ kpi.questions }} savol</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot"></span>Guruhlar</div>
+    <div class="value num">{{ kpi.groups }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot"></span>Jami sessiyalar</div>
+    <div class="value num">{{ kpi.sessions_total }}</div>
+    <div class="sub">🤖 {{ kpi.sessions_solo }} yakka · 👥 {{ kpi.sessions_group }} guruh</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot green"></span>Yakunlangan</div>
+    <div class="value num">{{ kpi.sessions_finished }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot amber"></span>Davom etayotgan</div>
+    <div class="value num">{{ kpi.sessions_active }}</div>
+  </div>
+</div>
+
+<div class="cols" style="margin-top:24px">
+  <div>
+    <div class="section-title">So'nggi sessiyalar</div>
+    {% if recent %}
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Foydalanuvchi</th><th>Test / Qism</th><th>Rejim</th><th class="right">Natija</th><th>Holat</th><th class="right">Sana</th></tr></thead>
+        <tbody>
+        {% for s in recent %}
+          <tr>
+            <td>{{ s.user.full_name|default:s.user.tg_id }}</td>
+            <td class="muted">{{ s.subtest.test.name }} <span class="subtle">/ {{ s.subtest.name }}</span></td>
+            <td>{% if s.mode == 'group' %}<span class="badge blue">👥 Guruh</span>{% else %}<span class="badge">🤖 Yakka</span>{% endif %}</td>
+            <td class="right num">{{ s.score }}/{{ s.total }}</td>
+            <td>
+              {% if s.status == 'finished' %}<span class="badge green">Yakunlangan</span>
+              {% elif s.status == 'active' %}<span class="badge amber">Davom etmoqda</span>
+              {% else %}<span class="badge red">Bekor</span>{% endif %}
+            </td>
+            <td class="right subtle num">{{ s.started_at|date:"d.m.Y H:i" }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<div class="empty"><div class="big">📭</div>Hali sessiyalar yo'q.</div>{% endif %}
+  </div>
+
+  <div>
+    <div class="section-title">Eng faol foydalanuvchilar</div>
+    {% if top_users %}
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Foydalanuvchi</th><th class="right">Urinish</th><th class="right">Yakunlangan</th></tr></thead>
+        <tbody>
+        {% for u in top_users %}
+          <tr>
+            <td><a href="{% url 'dashboard:user_detail' u.id %}">{{ u.full_name|default:u.username|default:u.tg_id }}</a></td>
+            <td class="right num">{{ u.attempts }}</td>
+            <td class="right num muted">{{ u.finished }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<div class="empty"><div class="big">👤</div>Hali faol foydalanuvchi yo'q.</div>{% endif %}
+  </div>
+</div>
+{% endblock %}

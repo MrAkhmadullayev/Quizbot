@@ -1,0 +1,42 @@
+{% load static %}
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Kirish · Quiz Admin</title>
+  <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-head">
+      <div class="logo">Q</div>
+      <h1>Boshqaruv paneli</h1>
+      <p>Davom etish uchun tizimga kiring</p>
+    </div>
+
+    <div class="card card-pad">
+      {% if error %}<div class="alert error" style="margin-bottom:16px">{{ error }}</div>{% endif %}
+      <form method="post" action="{% url 'dashboard:login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="field">
+          <label for="username">Login</label>
+          <input class="input" type="text" name="username" id="username" autocomplete="username" autofocus required>
+        </div>
+        <div class="field">
+          <label for="password">Parol</label>
+          <input class="input" type="password" name="password" id="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Kirish</button>
+      </form>
+    </div>
+    <p class="subtle" style="text-align:center;margin-top:16px;font-size:12px">
+      Quiz Bot · Boshqaruv tizimi
+    </p>
+  </div>
+</div>
+</body>
+</html>

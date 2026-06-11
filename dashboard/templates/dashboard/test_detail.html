@@ -1,0 +1,53 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ test.name }}{% endblock %}
+{% block page_title %}Test{% endblock %}
+{% block content %}
+<p class="page-sub" style="margin-bottom:14px">
+  <a href="{% url 'dashboard:tests' %}" class="muted">Testlar</a> › {{ test.name }}
+</p>
+
+<div class="toolbar">
+  <div>
+    <h2 class="page-title" style="margin-bottom:6px">{{ test.name }}
+      {% if test.is_active %}<span class="badge green">Faol</span>{% else %}<span class="badge red">O'chiq</span>{% endif %}
+    </h2>
+    <div class="muted" style="font-size:13px">
+      {% for g in groups %}<span class="badge">{{ g.name }}</span> {% empty %}<span class="subtle">Guruhga biriktirilmagan</span>{% endfor %}
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <a href="{% url 'dashboard:test_edit' test.id %}" class="btn btn-sm">Testni tahrirlash</a>
+  <a href="{% url 'dashboard:subtest_new' %}?test={{ test.id }}" class="btn btn-primary btn-sm">+ Yangi qism</a>
+</div>
+
+{% if subtests %}
+<div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th class="right" style="width:60px">Tartib</th><th>Qism</th><th class="right">Savollar</th><th>Holat</th><th class="right">Amal</th></tr></thead>
+    <tbody>
+    {% for s in subtests %}
+      <tr>
+        <td class="right subtle num">{{ s.order }}</td>
+        <td style="font-weight:500"><a href="{% url 'dashboard:subtest_detail' s.id %}">{{ s.name }}</a></td>
+        <td class="right num muted">{{ s.qcount }}</td>
+        <td>{% if s.is_active %}<span class="badge green">Faol</span>{% else %}<span class="badge red">O'chiq</span>{% endif %}</td>
+        <td class="right" style="white-space:nowrap">
+          <a href="{% url 'dashboard:subtest_detail' s.id %}" class="btn btn-sm">Savollar</a>
+          <a href="{% url 'dashboard:subtest_edit' s.id %}" class="btn btn-sm">Tahrir/ko'chirish</a>
+          <form method="post" action="{% url 'dashboard:subtest_delete' s.id %}" style="display:inline" onsubmit="return confirm('«{{ s.name|escapejs }}» qismi va savollari o‘chiriladi. Davom etilsinmi?');">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-danger" type="submit">O'chirish</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">
+  <div class="big">📂</div>
+  Bu testda hali qism yo'q. <a href="{% url 'dashboard:subtest_new' %}?test={{ test.id }}" class="muted" style="text-decoration:underline">Yangi qism qo'shing</a>.
+</div>
+{% endif %}
+{% endblock %}

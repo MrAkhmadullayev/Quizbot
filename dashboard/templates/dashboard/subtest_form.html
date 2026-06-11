@@ -1,0 +1,47 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{% if subtest %}Qismni tahrirlash{% else %}Yangi qism{% endif %}{% endblock %}
+{% block page_title %}{% if subtest %}Qismni tahrirlash{% else %}Yangi qism{% endif %}{% endblock %}
+{% block content %}
+<p class="page-sub" style="margin-bottom:18px">
+  <a href="{% url 'dashboard:tests' %}" class="muted">Testlar</a> ›
+  {% if subtest %}<a href="{% url 'dashboard:test_detail' subtest.test_id %}" class="muted">{{ subtest.test.name }}</a> › {{ subtest.name }}{% else %}Yangi qism{% endif %}
+</p>
+
+<form method="post" style="max-width:640px">
+  {% csrf_token %}
+  <div class="card card-pad">
+    <div class="field">
+      <label for="name">Qism nomi</label>
+      <input class="input" type="text" name="name" id="name" value="{{ subtest.name|default:'' }}" required autofocus>
+    </div>
+    <div class="field">
+      <label for="test_id">Tegishli test <span class="subtle">(boshqasini tanlasangiz — ko'chiriladi)</span></label>
+      <select class="select" name="test_id" id="test_id" required>
+        {% for t in all_tests %}
+          <option value="{{ t.id }}"
+            {% if subtest and subtest.test_id == t.id %}selected{% elif not subtest and default_test_id == t.id %}selected{% endif %}>
+            {{ t.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="cols">
+      <div class="field">
+        <label for="order">Tartib</label>
+        <input class="input" type="number" name="order" id="order" value="{{ subtest.order|default:0 }}" min="0">
+      </div>
+      <div class="field">
+        <label>Holat</label>
+        <div class="checkbox-row" style="padding-top:8px">
+          <input type="checkbox" name="is_active" id="is_active" {% if not subtest or subtest.is_active %}checked{% endif %}>
+          <label for="is_active" style="margin:0">Faol</label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sticky-actions">
+    <button class="btn btn-primary" type="submit">Saqlash</button>
+    <a href="{% if subtest %}{% url 'dashboard:subtest_detail' subtest.id %}{% elif default_test_id %}{% url 'dashboard:test_detail' default_test_id %}{% else %}{% url 'dashboard:tests' %}{% endif %}" class="btn">Bekor qilish</a>
+  </div>
+</form>
+{% endblock %}

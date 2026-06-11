@@ -1,0 +1,50 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Foydalanuvchilar{% endblock %}
+{% block page_title %}Foydalanuvchilar{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2 class="page-title">Foydalanuvchilar</h2>
+    <p class="page-sub" style="margin:0">{{ total_count }} ta foydalanuvchi. Har biri bo'yicha statistika.</p>
+  </div>
+  <div class="spacer"></div>
+  <form method="get" class="search">
+    <input class="input" type="text" name="q" value="{{ search }}" placeholder="Ism, username yoki telefon...">
+    <button class="btn" type="submit">Qidirish</button>
+  </form>
+</div>
+
+{% if page.object_list %}
+<div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th>Foydalanuvchi</th><th>Telefon</th><th class="right">Urinishlar</th><th class="right">Yakunlangan</th><th class="right">So'nggi faollik</th><th class="right"></th></tr></thead>
+    <tbody>
+    {% for u in page.object_list %}
+      <tr>
+        <td>
+          <a href="{% url 'dashboard:user_detail' u.id %}" style="font-weight:500">{{ u.full_name|default:u.username|default:u.tg_id }}</a>
+          {% if u.username %}<div class="subtle">@{{ u.username }}</div>{% endif %}
+        </td>
+        <td class="muted num">{{ u.phone|default:"—" }}</td>
+        <td class="right num">{{ u.attempts }}</td>
+        <td class="right num muted">{{ u.finished }}</td>
+        <td class="right subtle num">{% if u.last_at %}{{ u.last_at|date:"d.m.Y H:i" }}{% else %}—{% endif %}</td>
+        <td class="right"><a href="{% url 'dashboard:user_detail' u.id %}" class="btn btn-sm">Batafsil</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if page.paginator.num_pages > 1 %}
+<div class="pagination">
+  {% if page.has_previous %}<a class="btn btn-sm" href="?q={{ search|urlencode }}&page={{ page.previous_page_number }}">←</a>{% endif %}
+  <span class="subtle" style="font-size:12px">{{ page.number }} / {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn btn-sm" href="?q={{ search|urlencode }}&page={{ page.next_page_number }}">→</a>{% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty"><div class="big">🔍</div>Foydalanuvchi topilmadi.</div>
+{% endif %}
+{% endblock %}

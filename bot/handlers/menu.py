@@ -5,7 +5,7 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery
 
 from bot import db, texts
-from bot.keyboards import main_menu_kb, back_kb, tests_kb
+from bot.keyboards import main_menu_kb, back_kb, tests_kb, groups_kb
 
 router = Router()
 
@@ -27,15 +27,39 @@ async def profile(cb: CallbackQuery):
 
 
 @router.callback_query(F.data == "menu:tests")
-async def tests(cb: CallbackQuery):
-    tlist = await db.list_tests()
-    if not tlist:
+async def groups(cb: CallbackQuery):
+    glist = await db.list_groups()
+    if not glist:
         await cb.message.edit_text(
-            "Hozircha testlar yo'q. Admin test yuklashi kerak.", reply_markup=back_kb()
+            "Hozircha guruhlar yo'q. Admin guruh yaratib, unga test biriktirishi kerak.",
+            reply_markup=back_kb(),
         )
         await cb.answer()
         return
-    await cb.message.edit_text("📝 Testni tanlang:", reply_markup=tests_kb(tlist))
+    await cb.message.edit_text("👥 Guruhni tanlang:", reply_markup=groups_kb(glist))
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("grp:"))
+async def group_tests(cb: CallbackQuery):
+    group_id = int(cb.data.split(":")[1])
+    group = await db.get_group(group_id)
+    if not group:
+        await cb.answer("Guruh topilmadi yoki faol emas.", show_alert=True)
+        return
+    tlist = await db.list_group_tests(group_id)
+    if not tlist:
+        await cb.message.edit_text(
+            f"📚 <b>{escape(group.name)}</b>\n\n"
+            "Bu guruhda hozircha ishlashga tayyor test yo'q.",
+            reply_markup=back_kb("menu:tests"),
+        )
+        await cb.answer()
+        return
+    await cb.message.edit_text(
+        f"📚 <b>{escape(group.name)}</b>\n📝 Testni tanlang:",
+        reply_markup=tests_kb(tlist, group_id=group_id),
+    )
     await cb.answer()
 
 

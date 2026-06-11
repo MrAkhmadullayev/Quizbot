@@ -1,0 +1,78 @@
+{% load static %}
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>{% block title %}Boshqaruv paneli{% endblock %} · Quiz Admin</title>
+  <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="logo">Q</span>
+      <span>Quiz Admin</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Asosiy</div>
+      <a href="{% url 'dashboard:home' %}" class="{% if active == 'home' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Dashboard
+      </a>
+      <div class="nav-label">Boshqaruv</div>
+      <a href="{% url 'dashboard:tests' %}" class="{% if active == 'tests' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Testlar
+      </a>
+      <a href="{% url 'dashboard:upload' %}" class="{% if active == 'upload' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Test yuklash
+      </a>
+      <a href="{% url 'dashboard:groups' %}" class="{% if active == 'groups' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Guruhlar
+      </a>
+      <a href="{% url 'dashboard:users' %}" class="{% if active == 'users' %}active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        Foydalanuvchilar
+      </a>
+    </nav>
+    <div class="sidebar-foot">
+      <a href="/admin/" class="muted" target="_blank" rel="noopener">Django admin ↗</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn btn-ghost btn-sm menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+        <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+      </div>
+      <div class="right">
+        <div class="user-chip">
+          <span class="avatar">{{ request.user.username|slice:":1"|upper }}</span>
+          <span>{{ request.user.username }}</span>
+        </div>
+        <form method="post" action="{% url 'dashboard:logout' %}">
+          {% csrf_token %}
+          <button class="btn btn-sm" type="submit">Chiqish</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="content">
+      {% if messages %}
+        <div class="flash">
+          {% for m in messages %}
+            <div class="alert {{ m.tags }}">{{ m }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+</body>
+</html>

@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "quiz.apps.QuizConfig",
+    "dashboard.apps.DashboardConfig",
 ]
 
 MIDDLEWARE = [
@@ -65,11 +66,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# Lokal SQLite — barchasi loyiha yonida (data/db.sqlite3)
+# Lokal SQLite.
+# MUHIM: jonli baza faylini iCloud/Dropbox sinxronlanadigan papkada SAQLAMANG —
+# sinxronizatsiya aktiv faylni buzadi ("database disk image is malformed").
+# Bazani sinxrondan tashqari joyga ko'chirish uchun .env'da DB_PATH ni belgilang.
+# Misol:  DB_PATH=/Users/mrakhmadullayev/quizbot-data/db.sqlite3
+DB_PATH = os.getenv("DB_PATH", str(BASE_DIR / "data" / "db.sqlite3"))
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "data" / "db.sqlite3",
+        "NAME": DB_PATH,
         "CONN_MAX_AGE": 60,
         "OPTIONS": {
             "timeout": 30,
@@ -126,6 +133,17 @@ QUESTIONS_PER_PART = int(os.getenv("QUESTIONS_PER_PART", "50"))
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+
+# Dashboard login sahifasi (login_required uchun)
+LOGIN_URL = "/dashboard/login/"
+
+# Login throttling uchun lokal cache (tashqi xizmatsiz, tez)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "dashboard-cache",
+    }
+}
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() == "true"

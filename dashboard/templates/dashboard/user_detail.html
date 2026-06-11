@@ -1,0 +1,94 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ tg_user.full_name|default:tg_user.tg_id }}{% endblock %}
+{% block page_title %}Foydalanuvchi{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2 class="page-title">{{ tg_user.full_name|default:tg_user.username|default:tg_user.tg_id }}</h2>
+    <p class="page-sub" style="margin:0">
+      {% if tg_user.username %}@{{ tg_user.username }} · {% endif %}
+      {% if tg_user.phone %}{{ tg_user.phone }} · {% endif %}
+      ID: {{ tg_user.tg_id }} · Ro'yxatdan: {{ tg_user.created_at|date:"d.m.Y" }}
+    </p>
+  </div>
+  <div class="spacer"></div>
+  <a href="{% url 'dashboard:users' %}" class="btn btn-sm">← Ro'yxat</a>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="label"><span class="dot"></span>Yakka urinishlar</div>
+    <div class="value num">{{ kpi.attempts }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot green"></span>Yakunlangan</div>
+    <div class="value num">{{ kpi.finished }}</div>
+    <div class="sub">{{ kpi.active }} davom etmoqda · {{ kpi.cancelled }} bekor</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot blue"></span>O'rtacha natija</div>
+    <div class="value num">{% if kpi.avg_pct is not None %}{{ kpi.avg_pct }}%{% else %}—{% endif %}</div>
+    <div class="sub">yakunlangan testlar bo'yicha</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot"></span>Aniqlik</div>
+    <div class="value num">{% if kpi.accuracy is not None %}{{ kpi.accuracy }}%{% else %}—{% endif %}</div>
+    <div class="sub">{{ kpi.correct_answers }}/{{ kpi.total_answers }} to'g'ri javob</div>
+  </div>
+  <div class="kpi">
+    <div class="label"><span class="dot amber"></span>Guruh testlari</div>
+    <div class="value num">{{ kpi.group_participated }}</div>
+    <div class="sub">qatnashgan</div>
+  </div>
+</div>
+
+<div class="section-title">Test/qism bo'yicha taqsimot</div>
+{% if kpi.breakdown %}
+<div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th>Guruh</th><th>Test</th><th>Qism</th><th class="right">Urinish</th><th class="right">Yakunlangan</th><th class="right">Eng yaxshi</th></tr></thead>
+    <tbody>
+    {% for b in kpi.breakdown %}
+      <tr>
+        <td>{% for gname in b.groups %}<span class="badge">{{ gname }}</span> {% empty %}<span class="subtle">— guruhsiz —</span>{% endfor %}</td>
+        <td style="font-weight:500">{{ b.subtest__test__name }}</td>
+        <td class="muted">{{ b.subtest__name }}</td>
+        <td class="right num">{{ b.attempts }}</td>
+        <td class="right num">
+          {% if b.finished %}<span class="badge green">{{ b.finished }}</span>{% else %}<span class="subtle">0</span>{% endif %}
+        </td>
+        <td class="right num muted">{{ b.best }}/{{ b.total }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty"><div class="big">📊</div>Bu foydalanuvchi hali yakka test ishlamagan.</div>
+{% endif %}
+
+<div class="section-title">So'nggi yakka sessiyalar</div>
+{% if kpi.recent %}
+<div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th>Test / Qism</th><th class="right">Natija</th><th>Holat</th><th class="right">Sana</th></tr></thead>
+    <tbody>
+    {% for s in kpi.recent %}
+      <tr>
+        <td>{{ s.subtest.test.name }} <span class="subtle">/ {{ s.subtest.name }}</span></td>
+        <td class="right num">{{ s.score }}/{{ s.total }}</td>
+        <td>
+          {% if s.status == 'finished' %}<span class="badge green">Yakunlangan</span>
+          {% elif s.status == 'active' %}<span class="badge amber">Davom etmoqda</span>
+          {% else %}<span class="badge red">Bekor</span>{% endif %}
+        </td>
+        <td class="right subtle num">{{ s.started_at|date:"d.m.Y H:i" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty"><div class="big">🕘</div>Sessiyalar yo'q.</div>
+{% endif %}
+{% endblock %}

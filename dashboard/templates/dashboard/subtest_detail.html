@@ -1,0 +1,48 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ subtest.name }}{% endblock %}
+{% block page_title %}Qism{% endblock %}
+{% block content %}
+<p class="page-sub" style="margin-bottom:14px">
+  <a href="{% url 'dashboard:tests' %}" class="muted">Testlar</a> ›
+  <a href="{% url 'dashboard:test_detail' subtest.test_id %}" class="muted">{{ subtest.test.name }}</a> ›
+  {{ subtest.name }}
+</p>
+
+<div class="toolbar">
+  <div>
+    <h2 class="page-title" style="margin-bottom:4px">{{ subtest.name }}</h2>
+    <p class="page-sub" style="margin:0">{{ questions|length }} ta savol</p>
+  </div>
+  <div class="spacer"></div>
+  <a href="{% url 'dashboard:subtest_edit' subtest.id %}" class="btn btn-sm">Qismni tahrirlash</a>
+  <a href="{% url 'dashboard:question_new' %}?subtest={{ subtest.id }}" class="btn btn-primary btn-sm">+ Yangi savol</a>
+</div>
+
+{% if questions %}
+  {% for q in questions %}
+    <div class="qcard">
+      <div style="display:flex;justify-content:space-between;gap:12px">
+        <div class="qtext" style="margin-bottom:8px">{{ forloop.counter }}. {{ q.text }}</div>
+        <div style="white-space:nowrap">
+          <a href="{% url 'dashboard:question_edit' q.id %}" class="btn btn-sm">Tahrir/ko'chirish</a>
+          <form method="post" action="{% url 'dashboard:question_delete' q.id %}" style="display:inline" onsubmit="return confirm('Savol o‘chirilsinmi?');">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-danger" type="submit">O'chirish</button>
+          </form>
+        </div>
+      </div>
+      {% for opt in q.options.all %}
+        <div class="opt" style="cursor:default">
+          {% if opt.is_correct %}<span class="badge green">✓</span>{% else %}<span class="subtle" style="width:18px;display:inline-block;text-align:center">▫</span>{% endif %}
+          <span {% if opt.is_correct %}style="color:var(--fg)"{% endif %}>{{ opt.text }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% else %}
+<div class="empty">
+  <div class="big">❓</div>
+  Bu qismda hali savol yo'q. <a href="{% url 'dashboard:question_new' %}?subtest={{ subtest.id }}" class="muted" style="text-decoration:underline">Yangi savol qo'shing</a>.
+</div>
+{% endif %}
+{% endblock %}

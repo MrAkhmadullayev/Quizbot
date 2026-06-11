@@ -22,7 +22,7 @@ from django.utils.html import format_html
 
 from .models import (
     TelegramUser, Test, SubTest, Question, Option,
-    QuizSession, Answer, GroupPoll, KnownGroup,
+    QuizSession, Answer, GroupPoll, KnownGroup, TestGroup,
 )
 from .parsers import excel_parser, text_parser
 from . import services
@@ -274,6 +274,18 @@ class TestAdmin(admin.ModelAdmin):
             ),
         }
         return TemplateResponse(request, "admin/quiz/preview.html", context)
+
+
+@admin.register(TestGroup)
+class TestGroupAdmin(admin.ModelAdmin):
+    list_display = ("name", "test_count", "order", "is_active")
+    list_editable = ("order", "is_active")
+    search_fields = ("name",)
+    filter_horizontal = ("tests",)
+
+    def test_count(self, obj):
+        return obj.tests.count()
+    test_count.short_description = "Testlar soni"
 
 
 @admin.register(SubTest)

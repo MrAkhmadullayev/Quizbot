@@ -1,0 +1,43 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Guruhlar{% endblock %}
+{% block page_title %}Guruhlar{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2 class="page-title">Guruhlar</h2>
+    <p class="page-sub" style="margin:0">Testlarni guruhlarga ajrating. Foydalanuvchi botda avval guruhni tanlaydi.</p>
+  </div>
+  <div class="spacer"></div>
+  <a href="{% url 'dashboard:group_new' %}" class="btn btn-primary">+ Yangi guruh</a>
+</div>
+
+{% if groups %}
+<div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th class="right" style="width:60px">Tartib</th><th>Nomi</th><th class="right">Testlar</th><th>Holat</th><th class="right">Amal</th></tr></thead>
+    <tbody>
+    {% for g in groups %}
+      <tr>
+        <td class="right subtle num">{{ g.order }}</td>
+        <td style="font-weight:500">{{ g.name }}{% if g.description %}<div class="subtle" style="font-weight:400">{{ g.description|truncatechars:60 }}</div>{% endif %}</td>
+        <td class="right num muted">{{ g.test_count }}</td>
+        <td>{% if g.is_active %}<span class="badge green">Faol</span>{% else %}<span class="badge red">O'chiq</span>{% endif %}</td>
+        <td class="right">
+          <a href="{% url 'dashboard:group_edit' g.id %}" class="btn btn-sm">Tahrirlash</a>
+          <form method="post" action="{% url 'dashboard:group_delete' g.id %}" style="display:inline" onsubmit="return confirm('«{{ g.name|escapejs }}» o‘chirilsinmi?');">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-danger" type="submit">O'chirish</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">
+  <div class="big">👥</div>
+  Hali guruh yo'q. <a href="{% url 'dashboard:group_new' %}" class="muted" style="text-decoration:underline">Birinchi guruhni yarating</a>.
+</div>
+{% endif %}
+{% endblock %}

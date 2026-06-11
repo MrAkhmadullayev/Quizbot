@@ -1,0 +1,55 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{% if group %}Guruhni tahrirlash{% else %}Yangi guruh{% endif %}{% endblock %}
+{% block page_title %}{% if group %}Guruhni tahrirlash{% else %}Yangi guruh{% endif %}{% endblock %}
+{% block content %}
+<h2 class="page-title">{% if group %}{{ group.name }}{% else %}Yangi guruh{% endif %}</h2>
+<p class="page-sub">Guruh nomini kiriting va unga tegishli testlarni belgilang.</p>
+
+<form method="post" style="max-width:720px">
+  {% csrf_token %}
+  <div class="card card-pad">
+    <div class="field">
+      <label for="name">Guruh nomi</label>
+      <input class="input" type="text" name="name" id="name" value="{{ group.name|default:'' }}" required>
+    </div>
+    <div class="field">
+      <label for="description">Tavsif <span class="subtle">(ixtiyoriy)</span></label>
+      <textarea class="input" name="description" id="description" rows="2">{{ group.description|default:'' }}</textarea>
+    </div>
+    <div class="cols">
+      <div class="field">
+        <label for="order">Tartib</label>
+        <input class="input" type="number" name="order" id="order" value="{{ group.order|default:0 }}" min="0">
+      </div>
+      <div class="field">
+        <label>Holat</label>
+        <div class="checkbox-row" style="padding-top:8px">
+          <input type="checkbox" name="is_active" id="is_active" {% if not group or group.is_active %}checked{% endif %}>
+          <label for="is_active" style="margin:0">Faol (botda ko'rinsin)</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Testlar ({{ all_tests|length }})</div>
+  <div class="card card-pad">
+    {% if all_tests %}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px">
+        {% for t in all_tests %}
+          <label class="checkbox-row" style="padding:6px 8px;border:1px solid var(--border);border-radius:7px">
+            <input type="checkbox" name="tests" value="{{ t.id }}" {% if t.id in selected %}checked{% endif %}>
+            <span>{{ t.name }} <span class="subtle">({{ t.question_count }})</span></span>
+          </label>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted" style="margin:0">Hali test yo'q. Avval test yuklang.</p>
+    {% endif %}
+  </div>
+
+  <div class="sticky-actions">
+    <button class="btn btn-primary" type="submit">Saqlash</button>
+    <a href="{% url 'dashboard:groups' %}" class="btn">Bekor qilish</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Test yuklash{% endblock %}
+{% block page_title %}Test yuklash{% endblock %}
+{% block content %}
+<h2 class="page-title">Test yuklash</h2>
+<p class="page-sub">Excel, PDF yoki TXT fayldan savollarni yuklang. Keyingi qadamda to'g'ri javoblarni belgilaysiz.</p>
+
+<div style="max-width:640px">
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div style="font-size:13px;color:var(--fg-muted);line-height:1.7">
+      <b style="color:var(--fg)">Qo'llab-quvvatlanadigan formatlar</b><br>
+      • <b>Excel (.xlsx)</b> — ustunlar: <code>Test, SubTest, Question, Option1..4, Correct</code><br>
+      • <b>PDF / TXT</b> — <code>?</code> savol, <code>=</code> variant, <code>+</code> to'g'ri javob. Test/Qism nomini quyida kiriting.
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="card card-pad">
+    {% csrf_token %}
+    <div class="field">
+      <label for="file">Fayl</label>
+      <input class="input" type="file" name="file" id="file" accept=".xlsx,.pdf,.txt" required>
+    </div>
+    <div class="cols">
+      <div class="field">
+        <label for="test_name">Test nomi <span class="subtle">(PDF/TXT uchun)</span></label>
+        <input class="input" type="text" name="test_name" id="test_name" placeholder="Masalan: Web Programming 2025">
+      </div>
+      <div class="field">
+        <label for="subtest_name">Qism nomi <span class="subtle">(PDF/TXT uchun)</span></label>
+        <input class="input" type="text" name="subtest_name" id="subtest_name" placeholder="Masalan: 1-qism">
+      </div>
+    </div>
+    <div class="field">
+      <label for="group_id">Guruhga biriktirish <span class="subtle">(ixtiyoriy)</span></label>
+      <select class="select" name="group_id" id="group_id">
+        <option value="">— Biriktirilmasin —</option>
+        {% for g in all_groups %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
+      </select>
+      <div class="hint">Tanlangan guruhga yuklangan test avtomatik qo'shiladi.</div>
+    </div>
+    <div class="sticky-actions">
+      <button class="btn btn-primary" type="submit">Parse qilish va ko'rib chiqish →</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

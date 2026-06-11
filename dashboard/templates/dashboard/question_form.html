@@ -1,0 +1,108 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{% if question %}Savolni tahrirlash{% else %}Yangi savol{% endif %}{% endblock %}
+{% block page_title %}{% if question %}Savolni tahrirlash{% else %}Yangi savol{% endif %}{% endblock %}
+{% block content %}
+<p class="page-sub" style="margin-bottom:18px">
+  <a href="{% url 'dashboard:tests' %}" class="muted">Testlar</a> ›
+  {% if question %}<a href="{% url 'dashboard:subtest_detail' question.subtest_id %}" class="muted">{{ question.subtest.test.name }} / {{ question.subtest.name }}</a> › Savol{% else %}Yangi savol{% endif %}
+</p>
+
+<form method="post" id="qform" style="max-width:720px">
+  {% csrf_token %}
+  <div class="card card-pad">
+    <div class="field">
+      <label for="text">Savol matni</label>
+      <textarea class="input" name="text" id="text" rows="3" required autofocus>{% if form_text %}{{ form_text }}{% else %}{{ question.text|default:'' }}{% endif %}</textarea>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label for="subtest_id">Qism <span class="subtle">(boshqasini tanlasangiz — ko'chiriladi)</span></label>
+      <select class="select" name="subtest_id" id="subtest_id" required>
+        {% for s in all_subtests %}
+          <option value="{{ s.id }}"
+            {% if form_subtest_id %}{% if form_subtest_id == s.id|stringformat:'s' %}selected{% endif %}
+            {% elif question %}{% if question.subtest_id == s.id %}selected{% endif %}
+            {% elif default_subtest_id == s.id %}selected{% endif %}>
+            {{ s.test.name }} / {{ s.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="section-title">Variantlar <span class="subtle" style="font-weight:400">({{ min_options }}–{{ max_options }} ta, bittasi to'g'ri)</span></div>
+  <div class="card card-pad">
+    <div id="opts">
+      {% if posted_options %}
+        {% for o in posted_options %}
+          <div class="opt-row" style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+            <input type="radio" name="correct" value="{{ forloop.counter0 }}" {% if o.is_correct %}checked{% endif %} title="To'g'ri javob">
+            <input class="input" type="text" name="opt_text" value="{{ o.text }}" placeholder="Variant matni">
+            <button type="button" class="btn btn-sm btn-danger remove-opt">✕</button>
+          </div>
+        {% endfor %}
+      {% elif existing_options %}
+        {% for o in existing_options %}
+          <div class="opt-row" style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+            <input type="radio" name="correct" value="{{ forloop.counter0 }}" {% if o.is_correct %}checked{% endif %} title="To'g'ri javob">
+            <input class="input" type="text" name="opt_text" value="{{ o.text }}" placeholder="Variant matni">
+            <button type="button" class="btn btn-sm btn-danger remove-opt">✕</button>
+          </div>
+        {% endfor %}
+      {% else %}
+        {% for i in "0123" %}
+          <div class="opt-row" style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+            <input type="radio" name="correct" value="{{ forloop.counter0 }}" {% if forloop.first %}checked{% endif %} title="To'g'ri javob">
+            <input class="input" type="text" name="opt_text" placeholder="Variant matni">
+            <button type="button" class="btn btn-sm btn-danger remove-opt">✕</button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+    <button type="button" id="addOpt" class="btn btn-sm" style="margin-top:6px">+ Variant qo'shish</button>
+    <div class="hint" style="margin-top:8px">Chap tarafdagi belgini tanlab to'g'ri javobni belgilang.</div>
+  </div>
+
+  <div class="sticky-actions">
+    <button class="btn btn-primary" type="submit">Saqlash</button>
+    <a href="{% if question %}{% url 'dashboard:subtest_detail' question.subtest_id %}{% elif default_subtest_id %}{% url 'dashboard:subtest_detail' default_subtest_id %}{% else %}{% url 'dashboard:tests' %}{% endif %}" class="btn">Bekor qilish</a>
+  </div>
+</form>
+
+<script>
+(function () {
+  const MIN = {{ min_options }}, MAX = {{ max_options }};
+  const opts = document.getElementById('opts');
+  const addBtn = document.getElementById('addOpt');
+  const form = document.getElementById('qform');
+
+  function rowHTML() {
+    return '<input type="radio" name="correct" value="0" title="To\'g\'ri javob">' +
+           '<input class="input" type="text" name="opt_text" placeholder="Variant matni">' +
+           '<button type="button" class="btn btn-sm btn-danger remove-opt">✕</button>';
+  }
+
+  addBtn.addEventListener('click', function () {
+    if (opts.querySelectorAll('.opt-row').length >= MAX) return;
+    const div = document.createElement('div');
+    div.className = 'opt-row';
+    div.style.cssText = 'display:flex;gap:10px;align-items:center;margin-bottom:8px';
+    div.innerHTML = rowHTML();
+    opts.appendChild(div);
+  });
+
+  opts.addEventListener('click', function (e) {
+    if (!e.target.classList.contains('remove-opt')) return;
+    if (opts.querySelectorAll('.opt-row').length <= MIN) return;
+    e.target.closest('.opt-row').remove();
+  });
+
+  // Yuborishdan oldin radio qiymatlarini qator tartibiga moslaymiz
+  form.addEventListener('submit', function () {
+    opts.querySelectorAll('.opt-row').forEach(function (row, i) {
+      const radio = row.querySelector('input[type=radio]');
+      if (radio) radio.value = i;
+    });
+  });
+})();
+</script>
+{% endblock %}

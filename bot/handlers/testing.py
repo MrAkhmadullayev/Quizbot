@@ -23,9 +23,19 @@ def _alert_text(value, limit=190):
     return value if len(value) <= limit else value[:limit - 1] + "…"
 
 
+def _parse_id_group(data):
+    """`prefix:id` yoki `prefix:id:group_id` ni (id, group_id) ga ajratadi.
+
+    group_id bo'lmasa None qaytaradi (eski oqim bilan moslik uchun)."""
+    parts = data.split(":")
+    main_id = int(parts[1])
+    group_id = int(parts[2]) if len(parts) > 2 and parts[2] else None
+    return main_id, group_id
+
+
 @router.callback_query(F.data.startswith("test:"))
 async def show_subtests(cb: CallbackQuery):
-    test_id = int(cb.data.split(":")[1])
+    test_id, group_id = _parse_id_group(cb.data)
     subs = await db.list_subtests(test_id)
     if not subs:
         await cb.answer(
@@ -35,14 +45,14 @@ async def show_subtests(cb: CallbackQuery):
         return
     await cb.message.edit_text(
         "📂 Qismni tanlang:",
-        reply_markup=subtests_kb(test_id, subs),
+        reply_markup=subtests_kb(test_id, subs, group_id=group_id),
     )
     await cb.answer()
 
 
 @router.callback_query(F.data.startswith("sub:"))
 async def show_start_modes(cb: CallbackQuery):
-    sub_id = int(cb.data.split(":")[1])
+    sub_id, group_id = _parse_id_group(cb.data)
     sub = await db.get_subtest(sub_id)
     if not sub:
         await cb.answer("Test qismi topilmadi.", show_alert=True)
@@ -60,13 +70,15 @@ async def show_start_modes(cb: CallbackQuery):
         f"Savollar soni: <b>{count}</b>\n\n"
         "Qanday boshlaymiz?"
     )
-    await cb.message.edit_text(text, reply_markup=start_modes_kb(sub_id))
+    await cb.message.edit_text(
+        text, reply_markup=start_modes_kb(sub_id, group_id=group_id)
+    )
     await cb.answer()
 
 
 @router.callback_query(F.data.startswith("backsub:"))
 async def back_to_subtests(cb: CallbackQuery):
-    sub_id = int(cb.data.split(":")[1])
+    sub_id, group_id = _parse_id_group(cb.data)
     sub = await db.get_subtest(sub_id)
     if not sub:
         await cb.answer("Test qismi topilmadi.", show_alert=True)
@@ -74,7 +86,7 @@ async def back_to_subtests(cb: CallbackQuery):
     subs = await db.list_subtests(sub.test_id)
     await cb.message.edit_text(
         "📂 Qismni tanlang:",
-        reply_markup=subtests_kb(sub.test_id, subs),
+        reply_markup=subtests_kb(sub.test_id, subs, group_id=group_id),
     )
     await cb.answer()
 

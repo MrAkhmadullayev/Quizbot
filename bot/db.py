@@ -14,6 +14,7 @@ from quiz.models import (
     SubTest,
     TelegramUser,
     Test,
+    TestGroup,
 )
 
 
@@ -62,18 +63,48 @@ def create_user(tg_id, username, full_name, phone):
     return user
 
 
-# ---------------- Testlar ----------------
-@sync_to_async(thread_sensitive=True)
-def list_tests():
+# ---------------- Guruhlar ----------------
+def _playable_test_qs():
+    """Ishlashga tayyor savoli bo'lgan faol testlar queryset'i."""
     playable = _playable_questions().filter(
         subtest__test_id=OuterRef("pk"),
         subtest__is_active=True,
     )
-    return list(
+    return (
         Test.objects.filter(is_active=True)
         .annotate(has_playable=Exists(playable))
         .filter(has_playable=True)
     )
+
+
+@sync_to_async(thread_sensitive=True)
+def list_groups():
+    """Ishlashga tayyor testi bor faol guruhlar."""
+    playable_ids = _playable_test_qs().values_list("id", flat=True)
+    return list(
+        TestGroup.objects.filter(is_active=True, tests__in=playable_ids)
+        .distinct()
+        .order_by("order", "name")
+    )
+
+
+@sync_to_async(thread_sensitive=True)
+def get_group(group_id):
+    return TestGroup.objects.filter(id=group_id, is_active=True).first()
+
+
+@sync_to_async(thread_sensitive=True)
+def list_group_tests(group_id):
+    """Tanlangan guruhga biriktirilgan, ishlashga tayyor testlar."""
+    return list(
+        _playable_test_qs().filter(groups__id=group_id).distinct()
+    )
+
+
+# ---------------- Testlar ----------------
+@sync_to_async(thread_sensitive=True)
+def list_tests():
+    return list(_playable_test_qs())
 
 
 @sync_to_async(thread_sensitive=True)

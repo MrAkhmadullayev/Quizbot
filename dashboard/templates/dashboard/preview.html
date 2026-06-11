@@ -1,0 +1,33 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Ko'rib chiqish{% endblock %}
+{% block page_title %}Ko'rib chiqish{% endblock %}
+{% block content %}
+<h2 class="page-title">To'g'ri javoblarni belgilang</h2>
+<p class="page-sub">
+  Jami <b style="color:var(--fg)">{{ total }}</b> ta savol.
+  {% if needs_review %}<span class="badge amber">⚠️ {{ needs_review }} ta savolda to'g'ri javob belgilanmagan</span>{% else %}Barcha to'g'ri javoblar aniqlangan.{% endif %}
+</p>
+
+<form method="post" action="{% url 'dashboard:upload_preview' %}">
+  {% csrf_token %}
+  {% for g in groups %}
+    <div class="section-title">📚 {{ g.test }} — {{ g.subtest }} ({{ g.questions|length }} savol)</div>
+    {% for q in g.questions %}
+      <div class="qcard {% if q.needs_review %}review{% endif %}">
+        <div class="qtext">{{ forloop.counter }}. {{ q.text }} {% if q.needs_review %}<span class="badge amber">Tekshirish kerak</span>{% endif %}</div>
+        {% for opt in q.options %}
+          <label class="opt">
+            <input type="radio" name="correct_{{ q.gi }}_{{ q.qi }}" value="{{ forloop.counter0 }}" required {% if q.correct_default == forloop.counter0 %}checked{% endif %}>
+            {{ opt.text }}
+          </label>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  <div class="sticky-actions">
+    <button class="btn btn-primary" type="submit">✅ Saqlash</button>
+    <a href="{% url 'dashboard:upload' %}" class="btn">Bekor qilish</a>
+  </div>
+</form>
+{% endblock %}

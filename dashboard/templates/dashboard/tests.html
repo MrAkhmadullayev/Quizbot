@@ -1,0 +1,48 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Testlar{% endblock %}
+{% block page_title %}Testlar{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h2 class="page-title">Testlar</h2>
+    <p class="page-sub" style="margin:0">Testga kirib qismlarni, qismga kirib savollarni boshqaring.</p>
+  </div>
+  <div class="spacer"></div>
+  <a href="{% url 'dashboard:test_new' %}" class="btn">+ Bo'sh test</a>
+  <a href="{% url 'dashboard:upload' %}" class="btn btn-primary">+ Fayldan yuklash</a>
+</div>
+
+{% if tests %}
+<div class="table-wrap">
+  <table class="tbl">
+    <thead><tr><th>Test</th><th class="right">Qismlar</th><th class="right">Savollar</th><th>Guruhlar</th><th>Holat</th><th class="right">Amal</th></tr></thead>
+    <tbody>
+    {% for t in tests %}
+      <tr>
+        <td style="font-weight:500"><a href="{% url 'dashboard:test_detail' t.id %}">{{ t.name }}</a></td>
+        <td class="right num muted">{{ t.subtest_count }}</td>
+        <td class="right num muted">{{ t.question_count }}</td>
+        <td>
+          {% for g in t.groups.all %}<span class="badge">{{ g.name }}</span> {% empty %}<span class="subtle">—</span>{% endfor %}
+        </td>
+        <td>{% if t.is_active %}<span class="badge green">Faol</span>{% else %}<span class="badge red">O'chiq</span>{% endif %}</td>
+        <td class="right" style="white-space:nowrap">
+          <a href="{% url 'dashboard:test_detail' t.id %}" class="btn btn-sm">Ochish</a>
+          <a href="{% url 'dashboard:test_edit' t.id %}" class="btn btn-sm">Tahrirlash</a>
+          <form method="post" action="{% url 'dashboard:test_delete' t.id %}" style="display:inline" onsubmit="return confirm('«{{ t.name|escapejs }}» va barcha qism/savollari o‘chiriladi. Davom etilsinmi?');">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-danger" type="submit">O'chirish</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">
+  <div class="big">📄</div>
+  Hali test yo'q. <a href="{% url 'dashboard:upload' %}" class="muted" style="text-decoration:underline">Fayldan yuklang</a> yoki <a href="{% url 'dashboard:test_new' %}" class="muted" style="text-decoration:underline">bo'sh test yarating</a>.
+</div>
+{% endif %}
+{% endblock %}
