@@ -10,8 +10,12 @@ env/
 *.log
 .env
 
-# Local DB & uploaded files (yonida lokal saqlanadi)
+# Local DB & uploaded files (hech qachon git'ga qo'shilmasin)
 data/db.sqlite3
+data/db.sqlite3-shm
+data/db.sqlite3-wal
+data/db.sqlite3*
+data/backups/
 data/uploads/
 
 # OS
