@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from html import escape
 
 from aiogram import Bot, F, Router
+from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import (
     TelegramAPIError,
     TelegramNetworkError,
@@ -214,14 +215,51 @@ async def bot_removed_from_group(event: ChatMemberUpdated):
 
 @router.message(Command("start"), F.chat.type.in_({"group", "supergroup"}))
 async def group_start_cmd(message: Message, bot: Bot):
-    """Guruhda /start uchun qisqa yo'riqnoma ko'rsatadi."""
+    """Admin /start yuborsa, guruhni server bazasiga qayta biriktiradi."""
+    if message.from_user is None:
+        return
+
+    user = await db.get_user(message.from_user.id)
+    if not user or not user.phone:
+        text = (
+            "Avval botning shaxsiy chatida /start bosib, "
+            "telefon raqamingiz bilan ro'yxatdan o'ting."
+        )
+    else:
+        try:
+            member = await bot.get_chat_member(
+                message.chat.id,
+                message.from_user.id,
+            )
+        except TelegramAPIError:
+            member = None
+
+        if (
+            member is None
+            or member.status not in {
+                ChatMemberStatus.CREATOR,
+                ChatMemberStatus.ADMINISTRATOR,
+            }
+        ):
+            text = "Faqat guruh egasi yoki administrator guruhni biriktira oladi."
+        else:
+            await db.register_group(
+                chat_id=message.chat.id,
+                title=message.chat.title or "",
+                added_by_tg_id=message.from_user.id,
+            )
+            text = (
+                "✅ <b>Guruh server bazasiga saqlandi!</b>\n\n"
+                "Endi botning shaxsiy chatiga qayting va "
+                "«Guruhda boshlash» tugmasini qayta bosing."
+            )
+
     try:
         await _group_requests.run(
             message.chat.id,
             lambda: bot.send_message(
                 message.chat.id,
-                "👋 Testni boshlash uchun botning shaxsiy chatiga o'ting va "
-                "shu guruhni tanlang.",
+                text,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(
                         text="🤖 Botni ochish",

@@ -792,13 +792,18 @@ def register_group(chat_id, title, added_by_tg_id):
         if added_by_tg_id
         else None
     )
+    defaults = {
+        "title": _clip(title, 255) or "",
+        "is_active": True,
+    }
+    # Noma'lum foydalanuvchidan kelgan update oldingi egani o'chirmasin.
+    # Yangi guruh bo'lsa added_by tabiiy ravishda null qoladi.
+    if user is not None:
+        defaults["added_by"] = user
+
     KnownGroup.objects.update_or_create(
         chat_id=chat_id,
-        defaults={
-            "title": _clip(title, 255) or "",
-            "added_by": user,
-            "is_active": True,
-        },
+        defaults=defaults,
     )
 
 

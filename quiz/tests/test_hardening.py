@@ -3,8 +3,9 @@ import asyncio
 from types import SimpleNamespace
 from unittest import mock
 
-from aiogram.methods import SendMessage, SendPoll
+from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramRetryAfter
+from aiogram.methods import SendMessage, SendPoll
 from asgiref.sync import async_to_sync
 from django.test import SimpleTestCase, TransactionTestCase
 
@@ -14,6 +15,7 @@ from bot.handlers.group import (
     _group_requests,
     _send_group_poll,
     _send_leaderboard,
+    group_start_cmd,
 )
 from bot.handlers.registration import _normalize_phone
 from bot.handlers.testing import _parse_id_group
@@ -168,6 +170,23 @@ class GroupSessionLifecycleTests(TransactionTestCase):
             -10,
         )
 
+    def test_unknown_adder_does_not_clear_existing_group_owner(self):
+        KnownGroup.objects.create(
+            chat_id=-11,
+            title="Old",
+            added_by=self.user,
+        )
+
+        async_to_sync(db.register_group)(
+            chat_id=-11,
+            title="Updated",
+            added_by_tg_id=999999,
+        )
+
+        group = KnownGroup.objects.get(chat_id=-11)
+        self.assertEqual(group.title, "Updated")
+        self.assertEqual(group.added_by, self.user)
+
 
 class GroupLeaderboardDeliveryTests(SimpleTestCase):
     def setUp(self):
@@ -291,6 +310,89 @@ class GroupLeaderboardDeliveryTests(SimpleTestCase):
         with self.assertRaises(TelegramRetryAfter):
             asyncio.run(run())
         self.assertEqual(bot.send_message.await_count, 2)
+
+
+class GroupRegistrationHandlerTests(SimpleTestCase):
+    def _message(self):
+        return SimpleNamespace(
+            chat=SimpleNamespace(
+                id=-100,
+                title="Production group",
+            ),
+            from_user=SimpleNamespace(id=77),
+        )
+
+    def test_registered_admin_can_reconnect_group_to_server_db(self):
+        message = self._message()
+        bot = SimpleNamespace(
+            get_chat_member=mock.AsyncMock(
+                return_value=SimpleNamespace(
+                    status=ChatMemberStatus.ADMINISTRATOR,
+                )
+            ),
+            send_message=mock.AsyncMock(),
+        )
+
+        async def run():
+            with (
+                mock.patch(
+                    "bot.handlers.group.db.get_user",
+                    new=mock.AsyncMock(
+                        return_value=SimpleNamespace(phone="+998901234567"),
+                    ),
+                ),
+                mock.patch(
+                    "bot.handlers.group.db.register_group",
+                    new=mock.AsyncMock(),
+                ) as register,
+                mock.patch(
+                    "bot.handlers.group._group_requests.run",
+                    new=mock.AsyncMock(),
+                ),
+            ):
+                await group_start_cmd(message, bot)
+                return register
+
+        register = asyncio.run(run())
+        register.assert_awaited_once_with(
+            chat_id=-100,
+            title="Production group",
+            added_by_tg_id=77,
+        )
+
+    def test_regular_member_cannot_claim_group(self):
+        message = self._message()
+        bot = SimpleNamespace(
+            get_chat_member=mock.AsyncMock(
+                return_value=SimpleNamespace(
+                    status=ChatMemberStatus.MEMBER,
+                )
+            ),
+            send_message=mock.AsyncMock(),
+        )
+
+        async def run():
+            with (
+                mock.patch(
+                    "bot.handlers.group.db.get_user",
+                    new=mock.AsyncMock(
+                        return_value=SimpleNamespace(phone="+998901234567"),
+                    ),
+                ),
+                mock.patch(
+                    "bot.handlers.group.db.register_group",
+                    new=mock.AsyncMock(),
+                ) as register,
+                mock.patch(
+                    "bot.handlers.group._group_requests.run",
+                    new=mock.AsyncMock(),
+                ),
+            ):
+                await group_start_cmd(message, bot)
+                return register
+
+        register = asyncio.run(run())
+        register.assert_not_awaited()
 
 
 class CreateUserClippingTests(TransactionTestCase):
