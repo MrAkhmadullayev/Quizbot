@@ -64,3 +64,33 @@ class ParserTests(SimpleTestCase):
             ["B", "C"],
         )
 
+    def test_options_with_operator_symbols_are_preserved(self):
+        """`===`, `!=`, `<tag>` kabi variantlar marker bilan yopishib
+        yozilsa ham buzilmasligi kerak (faqat bitta marker kesiladi)."""
+        questions = parse_text("? Operator?\n=!=\n+===\n===\n=<tag>")
+
+        self.assertEqual(len(questions), 1)
+        question = questions[0]
+        self.assertFalse(question["needs_review"])
+        self.assertEqual(
+            [(o["text"], o["is_correct"]) for o in question["options"]],
+            [("!=", False), ("===", True), ("==", False), ("<tag>", False)],
+        )
+
+    def test_options_with_code_identifiers(self):
+        questions = parse_text(
+            "??? Python maxsus fayl?\n+ __init__.py\n= $_GET\n= ==test=="
+        )
+
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(
+            [o["text"] for o in questions[0]["options"]],
+            ["__init__.py", "$_GET", "==test=="],
+        )
+        self.assertTrue(questions[0]["options"][0]["is_correct"])
+
+    def test_multiple_question_marks_normalized(self):
+        questions = parse_text("??? Savol matni?\n+ A\n= B")
+
+        self.assertEqual(questions[0]["text"], "Savol matni?")
+

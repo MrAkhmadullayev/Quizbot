@@ -266,6 +266,28 @@ def create_session(user_id, subtest_id, mode, chat_id=None, time_limit=0):
     if not question_ids:
         raise QuizOperationError("Bu qismda tayyor savollar yo'q.")
 
+    if mode == QuizSession.GROUP:
+        # Bitta guruhda bitta faol test: eskisi (tashlab ketilgan bo'lishi
+        # mumkin) bekor qilinadi, polllari yopiladi. Eski taymer task'i
+        # navbatdagi savolda ACTIVE topolmay o'z-o'zidan jim to'xtaydi.
+        stale_ids = list(
+            QuizSession.objects.select_for_update()
+            .filter(
+                mode=QuizSession.GROUP,
+                chat_id=chat_id,
+                status=QuizSession.ACTIVE,
+            )
+            .values_list("id", flat=True)
+        )
+        if stale_ids:
+            QuizSession.objects.filter(id__in=stale_ids).update(
+                status=QuizSession.CANCELLED,
+                finished_at=timezone.now(),
+            )
+            GroupPoll.objects.filter(
+                session_id__in=stale_ids, is_closed=False
+            ).update(is_closed=True, closed_at=timezone.now())
+
     try:
         time_limit = int(time_limit)
     except (TypeError, ValueError):
@@ -688,10 +710,60 @@ def finish_group_session(session_id, tg_id):
         raise QuizOperationError("Guruh test sessiyasi topilmadi.")
     if session.user.tg_id != tg_id:
         raise QuizOperationError("Faqat testni boshlagan inson boshqara oladi.")
-    if session.status == QuizSession.ACTIVE:
-        session.status = QuizSession.FINISHED
-        session.finished_at = timezone.now()
-        session.save(update_fields=["status", "finished_at"])
+    if session.status != QuizSession.ACTIVE:
+        return None
+    session.status = QuizSession.FINISHED
+    session.finished_at = timezone.now()
+    session.save(update_fields=["status", "finished_at"])
+    GroupPoll.objects.filter(session=session, is_closed=False).update(
+        is_closed=True,
+        closed_at=timezone.now(),
+    )
+    return {"chat_id": session.chat_id}
+
+
+@db_task
+def group_session_info(session_id):
+    """Guruh sessiyasi haqida intro/sanoq uchun ma'lumot."""
+    session = (
+        QuizSession.objects.select_related("subtest", "subtest__test", "user")
+        .filter(id=session_id, mode=QuizSession.GROUP)
+        .first()
+    )
+    if not session:
+        return None
+    return {
+        "chat_id": session.chat_id,
+        "total": session.total,
+        "time_limit": session.time_limit,
+        "test_name": session.subtest.test.name,
+        "subtest_name": session.subtest.name,
+        "host_name": session.user.full_name
+        or session.user.username
+        or str(session.user.tg_id),
+        "status": session.status,
+    }
+
+
+@db_task
+@transaction.atomic
+def finish_group_auto(session_id):
+    """Egasini tekshirmasdan guruh sessiyasini yakunlaydi (avtomatik taymer).
+
+    Faqat ACTIVE → FINISHED o'tishda chat_id qaytaradi. Sessiya allaqachon
+    yakunlangan/bekor qilingan bo'lsa None — shunda eskirgan taymer task'i
+    yoki ikkinchi 'To'xtatish' bosishi dublikat reyting yubormaydi.
+    """
+    session = (
+        QuizSession.objects.select_for_update()
+        .filter(id=session_id, mode=QuizSession.GROUP)
+        .first()
+    )
+    if not session or session.status != QuizSession.ACTIVE:
+        return None
+    session.status = QuizSession.FINISHED
+    session.finished_at = timezone.now()
+    session.save(update_fields=["status", "finished_at"])
     GroupPoll.objects.filter(session=session, is_closed=False).update(
         is_closed=True,
         closed_at=timezone.now(),

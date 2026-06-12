@@ -85,7 +85,7 @@ def start_modes_kb(subtest_id, group_id=None):
         [InlineKeyboardButton(text="🤖 Botda (yakka) boshlash",
                               callback_data=f"solo:{subtest_id}{_suffix(group_id)}")],
         [InlineKeyboardButton(text="👥 Guruhda boshlash",
-                              callback_data=f"group:{subtest_id}")],
+                              callback_data=f"group:{subtest_id}{_suffix(group_id)}")],
         [InlineKeyboardButton(text="⬅️ Orqaga",
                               callback_data=f"backsub:{subtest_id}{_suffix(group_id)}")],
     ])
@@ -134,5 +134,48 @@ def group_control_kb(session_id, question_id):
         [InlineKeyboardButton(
             text="🏁 Yakunlash",
             callback_data=f"gend:{session_id}:{question_id}",
+        )],
+    ])
+
+
+# Poll'da Telegram open_period chegarasi
+GROUP_TIME_MIN = 5
+GROUP_TIME_MAX = 600
+
+
+def group_time_kb(subtest_id, group_id, options, allow_none):
+    """Guruhda boshlashdan oldin vaqtni tanlash.
+
+    secs>0 => avtomatik (poll taymeri); secs=0 => boshlovchi qo'lda boshqaradi.
+    """
+    rows = []
+    seen = set()
+    for raw in options:
+        seconds = max(GROUP_TIME_MIN, min(int(raw), GROUP_TIME_MAX))
+        if seconds in seen:
+            continue
+        seen.add(seconds)
+        rows.append([InlineKeyboardButton(
+            text=f"⏱ {seconds} soniya",
+            callback_data=f"gtime:{subtest_id}:{group_id}:{seconds}",
+        )])
+    if allow_none:
+        rows.append([InlineKeyboardButton(
+            text="🙋 Boshlovchi boshqaradi (taymersiz)",
+            callback_data=f"gtime:{subtest_id}:{group_id}:0",
+        )])
+    rows.append([InlineKeyboardButton(
+        text="⬅️ Orqaga",
+        callback_data=f"backsub:{subtest_id}{_suffix(group_id)}",
+    )])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def group_stop_kb(session_id):
+    """Avtomatik (taymerli) guruh testida boshlovchi uchun to'xtatish."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🛑 To'xtatish",
+            callback_data=f"gstop:{session_id}",
         )],
     ])

@@ -77,7 +77,9 @@ def parse_text(content: str) -> list[dict]:
             if cur is None:
                 continue  # savolsiz variant — e'tiborsiz
             is_correct = line.startswith("+")
-            opt_text = line.lstrip("+=").strip()
+            # Faqat BITTA marker belgini kesamiz: lstrip('+=') ishlatilsa
+            # '===' yoki '+==' kabi dasturlash variantlari butunlay yo'qolardi
+            opt_text = line[1:].strip()
             if not opt_text:
                 continue
             cur["options"].append({"text": opt_text, "is_correct": is_correct})

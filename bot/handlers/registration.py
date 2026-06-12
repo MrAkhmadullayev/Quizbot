@@ -2,11 +2,11 @@
 import re
 
 from aiogram import F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import Message, ReplyKeyboardRemove
 
 from bot import db, texts
-from bot.keyboards import main_menu_kb, phone_request_kb
+from bot.keyboards import groups_kb, main_menu_kb, phone_request_kb
 
 router = Router()
 
@@ -25,10 +25,26 @@ def _normalize_phone(raw):
     return phone
 
 
+async def _show_groups(message: Message):
+    """«Test ishlash» — guruhlar (test qatlamlari) ro'yxatini ko'rsatadi."""
+    glist = await db.list_groups()
+    if not glist:
+        await message.answer(
+            "Hozircha guruhlar yo'q. Admin guruh yaratib, unga test biriktirishi kerak.",
+            reply_markup=main_menu_kb(),
+        )
+        return
+    await message.answer("👥 Guruhni tanlang:", reply_markup=groups_kb(glist))
+
+
 @router.message(CommandStart(), F.chat.type == "private")
-async def start(message: Message):
+async def start(message: Message, command: CommandObject):
     user = await db.get_user(message.from_user.id)
     if user and user.phone:
+        # Deep-link `?start=tests` — to'g'ridan-to'g'ri guruhlar ro'yxati
+        if (command.args or "").strip() == "tests":
+            await _show_groups(message)
+            return
         await message.answer(
             texts.WELCOME_BACK,
             reply_markup=main_menu_kb(),

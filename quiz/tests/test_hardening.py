@@ -3,14 +3,31 @@ import asyncio
 from types import SimpleNamespace
 from unittest import mock
 
+from aiogram.methods import SendMessage, SendPoll
+from aiogram.exceptions import TelegramRetryAfter
 from asgiref.sync import async_to_sync
 from django.test import SimpleTestCase, TransactionTestCase
 
 from bot import db
+from bot.handlers.group import (
+    _finish_group,
+    _group_requests,
+    _send_group_poll,
+    _send_leaderboard,
+)
 from bot.handlers.registration import _normalize_phone
 from bot.handlers.testing import _parse_id_group
 from bot.middlewares import ThrottlingMiddleware
-from quiz.models import TelegramUser
+from quiz.models import (
+    GroupPoll,
+    KnownGroup,
+    Option,
+    Question,
+    QuizSession,
+    SubTest,
+    TelegramUser,
+    Test,
+)
 
 
 class NormalizePhoneTests(SimpleTestCase):
@@ -42,6 +59,238 @@ class ParseCallbackTests(SimpleTestCase):
         self.assertEqual(_parse_id_group("sub:abc"), (None, None))
         self.assertEqual(_parse_id_group("sub:"), (None, None))
         self.assertEqual(_parse_id_group("sub:1:x"), (None, None))
+
+
+class GroupSessionLifecycleTests(TransactionTestCase):
+    """Bitta guruhda bitta faol test + dublikat reyting himoyasi."""
+
+    def setUp(self):
+        self.user = TelegramUser.objects.create(
+            tg_id=1, full_name="Owner", phone="+998901234567"
+        )
+        test = Test.objects.create(name="T")
+        self.subtest = SubTest.objects.create(test=test, name="Q")
+        question = Question.objects.create(
+            subtest=self.subtest, text="S?", order=0
+        )
+        self.correct = Option.objects.create(
+            question=question, text="A", is_correct=True, order=0
+        )
+        Option.objects.create(question=question, text="B", order=1)
+        self.question = question
+        KnownGroup.objects.create(chat_id=-10, title="G", added_by=self.user)
+
+    def _group_session(self):
+        return async_to_sync(db.create_session)(
+            self.user.id, self.subtest.id, "group", chat_id=-10
+        )
+
+    def test_new_group_session_supersedes_stale_active_one(self):
+        old = self._group_session()
+        async_to_sync(db.save_group_poll)(
+            "poll-old", 5, old.id, self.question.id,
+            {"0": self.correct.id}, 0,
+        )
+
+        new = self._group_session()
+
+        old.refresh_from_db()
+        self.assertEqual(old.status, QuizSession.CANCELLED)
+        self.assertTrue(
+            GroupPoll.objects.get(session=old).is_closed
+        )
+        new.refresh_from_db()
+        self.assertEqual(new.status, QuizSession.ACTIVE)
+
+    def test_finish_group_auto_runs_only_once(self):
+        session = self._group_session()
+
+        first = async_to_sync(db.finish_group_auto)(session.id)
+        second = async_to_sync(db.finish_group_auto)(session.id)
+
+        self.assertEqual(first, {"chat_id": -10})
+        self.assertIsNone(second)
+        session.refresh_from_db()
+        self.assertEqual(session.status, QuizSession.FINISHED)
+
+    def test_finish_group_auto_ignores_cancelled_session(self):
+        session = self._group_session()
+        async_to_sync(db.cancel_session)(session.id)
+
+        self.assertIsNone(async_to_sync(db.finish_group_auto)(session.id))
+        session.refresh_from_db()
+        self.assertEqual(session.status, QuizSession.CANCELLED)
+
+    def test_finish_group_manual_runs_only_once(self):
+        session = self._group_session()
+
+        first = async_to_sync(db.finish_group_session)(
+            session.id,
+            self.user.tg_id,
+        )
+        second = async_to_sync(db.finish_group_session)(
+            session.id,
+            self.user.tg_id,
+        )
+
+        self.assertEqual(first, {"chat_id": -10})
+        self.assertIsNone(second)
+
+    def test_manual_finish_sends_result_even_if_poll_close_fails(self):
+        session = self._group_session()
+        leaderboard = mock.AsyncMock(return_value=True)
+
+        with (
+            mock.patch(
+                "bot.handlers.group._close_telegram_poll",
+                new=mock.AsyncMock(side_effect=RuntimeError("network")),
+            ),
+            mock.patch(
+                "bot.handlers.group._send_leaderboard",
+                new=leaderboard,
+            ),
+            mock.patch("bot.handlers.group.logger.exception"),
+        ):
+            finished = async_to_sync(_finish_group)(
+                SimpleNamespace(),
+                session.id,
+                self.user.tg_id,
+                closed_poll={
+                    "chat_id": -10,
+                    "message_id": 7,
+                },
+            )
+
+        self.assertTrue(finished)
+        leaderboard.assert_awaited_once_with(
+            mock.ANY,
+            session.id,
+            -10,
+        )
+
+
+class GroupLeaderboardDeliveryTests(SimpleTestCase):
+    def setUp(self):
+        _group_requests._locks.clear()
+        _group_requests._last_call.clear()
+
+    def test_result_retries_after_telegram_flood_control(self):
+        bot = SimpleNamespace(
+            send_message=mock.AsyncMock(
+                side_effect=[
+                    TelegramRetryAfter(
+                        method=SendMessage(chat_id=-10, text="result"),
+                        message="Retry later",
+                        retry_after=0,
+                    ),
+                    None,
+                ]
+            )
+        )
+
+        async def run():
+            with (
+                mock.patch(
+                    "bot.handlers.group.db.group_leaderboard",
+                    new=mock.AsyncMock(return_value=[]),
+                ),
+                mock.patch(
+                    "bot.handlers.group.asyncio.sleep",
+                    new=mock.AsyncMock(),
+                ),
+            ):
+                return await _send_leaderboard(bot, 1, -10)
+
+        self.assertTrue(asyncio.run(run()))
+        self.assertEqual(bot.send_message.await_count, 2)
+
+    def test_poll_retries_after_telegram_flood_control(self):
+        question = SimpleNamespace(id=7, text="Savol")
+        options = [
+            SimpleNamespace(id=11, text="A"),
+            SimpleNamespace(id=12, text="B"),
+        ]
+        sent = SimpleNamespace(
+            poll=SimpleNamespace(id="poll-id"),
+            message_id=99,
+        )
+        bot = SimpleNamespace(
+            send_poll=mock.AsyncMock(
+                side_effect=[
+                    TelegramRetryAfter(
+                        method=SendPoll(
+                            chat_id=-20,
+                            question="Savol",
+                            options=["A", "B"],
+                        ),
+                        message="Retry later",
+                        retry_after=14,
+                    ),
+                    sent,
+                ]
+            ),
+        )
+
+        async def run():
+            with (
+                mock.patch(
+                    "bot.handlers.group.db.prepare_group_question",
+                    new=mock.AsyncMock(return_value={
+                        "chat_id": -20,
+                        "question": question,
+                        "options": options,
+                        "correct_index": 0,
+                    }),
+                ),
+                mock.patch(
+                    "bot.handlers.group.db.save_group_poll",
+                    new=mock.AsyncMock(),
+                ) as save_poll,
+                mock.patch(
+                    "bot.handlers.group.asyncio.sleep",
+                    new=mock.AsyncMock(),
+                ) as sleep,
+            ):
+                result = await _send_group_poll(
+                    bot,
+                    session_id=3,
+                    index=0,
+                )
+                return result, save_poll, sleep
+
+        result, save_poll, sleep = asyncio.run(run())
+
+        self.assertEqual(result, question.id)
+        self.assertEqual(bot.send_poll.await_count, 2)
+        save_poll.assert_awaited_once()
+        self.assertTrue(
+            any(call.args[0] >= 14 for call in sleep.await_args_list)
+        )
+
+    def test_flood_error_is_raised_after_retry_limit(self):
+        flood = TelegramRetryAfter(
+            method=SendMessage(chat_id=-30, text="result"),
+            message="Retry later",
+            retry_after=1,
+        )
+        bot = SimpleNamespace(
+            send_message=mock.AsyncMock(side_effect=flood),
+        )
+
+        async def run():
+            with mock.patch(
+                "bot.handlers.group.asyncio.sleep",
+                new=mock.AsyncMock(),
+            ):
+                await _group_requests.run(
+                    -30,
+                    lambda: bot.send_message(-30, "result"),
+                    attempts=2,
+                )
+
+        with self.assertRaises(TelegramRetryAfter):
+            asyncio.run(run())
+        self.assertEqual(bot.send_message.await_count, 2)
 
 
 class CreateUserClippingTests(TransactionTestCase):
