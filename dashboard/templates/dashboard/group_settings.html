@@ -1,0 +1,73 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ group.name }} — sozlamalar{% endblock %}
+{% block page_title %}Guruh sozlamalari{% endblock %}
+{% block content %}
+<p class="page-sub" style="margin-bottom:18px">
+  <a href="{% url 'dashboard:groups' %}" class="muted">Guruhlar</a> ›
+  <a href="{% url 'dashboard:group_edit' group.id %}" class="muted">{{ group.name }}</a> › Sozlamalar
+</p>
+
+<h2 class="page-title">{{ group.name }} — vaqt sozlamasi</h2>
+<p class="page-sub">Yoqilsa, foydalanuvchi botda test boshlashdan oldin vaqtni tanlaydi. Yoqilmasa — test darhol, vaqtsiz boshlanadi.</p>
+
+<div style="max-width:640px">
+  <!-- 1. Yoqish + 'Vaqt yo'q' -->
+  <form method="post" class="card card-pad" style="margin-bottom:16px">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="save_flags">
+    <div class="field">
+      <div class="checkbox-row">
+        <input type="checkbox" name="timer_enabled" id="timer_enabled" {% if group.timer_enabled %}checked{% endif %}>
+        <label for="timer_enabled" style="margin:0"><b>Vaqt sozlamasini yoqish</b></label>
+      </div>
+      <div class="hint">O'chirilgan bo'lsa, botda vaqt so'ralmaydi — test avtomatik boshlanadi.</div>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <div class="checkbox-row">
+        <input type="checkbox" name="timer_allow_none" id="timer_allow_none" {% if group.timer_allow_none %}checked{% endif %}>
+        <label for="timer_allow_none" style="margin:0">«Vaqt yo'q» variantini ko'rsatish</label>
+      </div>
+      <div class="hint">Belgilansa, foydalanuvchiga taymersiz boshlash imkoni ham chiqadi.</div>
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn btn-primary" type="submit">Saqlash</button>
+    </div>
+  </form>
+
+  <!-- 2. Vaqtlarni qo'shish -->
+  <div class="section-title">Vaqt variantlari (soniya)</div>
+  <div class="card card-pad">
+    <form method="post" style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_time">
+      <div class="field" style="margin:0;flex:1">
+        <label for="seconds">Soniya</label>
+        <input class="input" type="number" name="seconds" id="seconds" min="1" max="3600" placeholder="Masalan: 30" required>
+      </div>
+      <button class="btn btn-primary" type="submit">Qo'shish</button>
+    </form>
+
+    {% if options %}
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        {% for s in options %}
+          <span class="badge" style="padding:6px 10px;gap:8px">
+            ⏱ {{ s }} soniya
+            <form method="post" style="display:inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="remove_time">
+              <input type="hidden" name="value" value="{{ s }}">
+              <button type="submit" class="btn-ghost" style="border:none;background:none;color:#f87171;cursor:pointer;padding:0;font-size:13px" title="O'chirish">✕</button>
+            </form>
+          </span>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted" style="margin:0">Hali vaqt qo'shilmagan. Yuqoridan soniya kiritib «Qo'shish» bosing.</p>
+    {% endif %}
+  </div>
+
+  <div class="sticky-actions">
+    <a href="{% url 'dashboard:group_edit' group.id %}" class="btn">← Guruhga qaytish</a>
+  </div>
+</div>
+{% endblock %}

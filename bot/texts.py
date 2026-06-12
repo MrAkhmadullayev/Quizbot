@@ -39,10 +39,28 @@ def profile_text(user):
     )
 
 
-def question_text(index, total, q):
-    prefix = f"<b>Savol {index + 1}/{total}</b>\n\n"
+def question_text(index, total, q, remaining=None):
+    prefix = f"<b>Savol {index + 1}/{total}</b>\n"
+    if remaining is not None:
+        prefix += f"⏳ Qolgan vaqt: <b>{remaining}s</b>\n"
+    prefix += "\n"
     available = 4096 - len(prefix)
     return prefix + _escaped_limit(q.text, available)
+
+
+def timeout_question_text(index, total, question_text_value, correct_text):
+    feedback = (
+        "\n\n⏱ <b>VAQT TUGADI</b>\n"
+        "Siz javobni belgilamadingiz.\n"
+        f"🟢 <b>To'g'ri javob:</b> {_escaped_limit(correct_text, 500)}"
+    )
+    prefix = f"<b>Savol {index + 1}/{total}</b>\n\n"
+    available = 4096 - len(prefix) - len(feedback)
+    return (
+        prefix
+        + _escaped_limit(question_text_value, max(1, available))
+        + feedback
+    )
 
 
 def answered_question_text(

@@ -83,12 +83,32 @@ def subtests_kb(test_id, subtests, group_id=None):
 def start_modes_kb(subtest_id, group_id=None):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🤖 Botda (yakka) boshlash",
-                              callback_data=f"solo:{subtest_id}")],
+                              callback_data=f"solo:{subtest_id}{_suffix(group_id)}")],
         [InlineKeyboardButton(text="👥 Guruhda boshlash",
                               callback_data=f"group:{subtest_id}")],
         [InlineKeyboardButton(text="⬅️ Orqaga",
                               callback_data=f"backsub:{subtest_id}{_suffix(group_id)}")],
     ])
+
+
+def solo_time_kb(subtest_id, options, allow_none, group_id=None):
+    """Yakka test boshlashdan oldin vaqtni tanlash. secs=0 => taymersiz."""
+    rows = []
+    for seconds in options:
+        rows.append([InlineKeyboardButton(
+            text=f"⏱ {seconds} soniya",
+            callback_data=f"tsolo:{subtest_id}:{seconds}",
+        )])
+    if allow_none:
+        rows.append([InlineKeyboardButton(
+            text="♾ Vaqtsiz",
+            callback_data=f"tsolo:{subtest_id}:0",
+        )])
+    rows.append([InlineKeyboardButton(
+        text="⬅️ Orqaga",
+        callback_data=f"backsub:{subtest_id}{_suffix(group_id)}",
+    )])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def options_kb(session_id, options):

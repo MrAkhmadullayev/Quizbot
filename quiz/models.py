@@ -66,6 +66,13 @@ class TestGroup(models.Model):
         blank=True,
         verbose_name="Testlar",
     )
+    # --- Vaqt (taymer) sozlamalari ---
+    # Yoqilgan bo'lsa, foydalanuvchi botda test boshlashdan oldin vaqtni tanlaydi.
+    timer_enabled = models.BooleanField("Vaqt sozlamasi yoqilgan", default=False)
+    # "Vaqt yo'q" varianti ham ko'rsatilsinmi (taymersiz boshlash imkoni).
+    timer_allow_none = models.BooleanField("'Vaqt yo'q' varianti", default=False)
+    # Tanlanadigan vaqtlar (soniyalarda), masalan [30, 60, 90].
+    timer_options = models.JSONField("Vaqt variantlari (soniya)", default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -167,6 +174,8 @@ class QuizSession(models.Model):
     current_index = models.PositiveIntegerField(default=0)  # navbatdagi savol indeksi
     score = models.PositiveIntegerField(default=0)
     total = models.PositiveIntegerField(default=0)
+    # Har bir savolga ajratilgan vaqt (soniya). 0 = cheksiz (taymersiz).
+    time_limit = models.PositiveIntegerField("Savolga vaqt (soniya)", default=0)
     question_ids = models.JSONField(default=list, blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=ACTIVE)
     started_at = models.DateTimeField(auto_now_add=True)

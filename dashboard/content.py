@@ -303,3 +303,51 @@ def question_delete(request, question_id):
     question.delete()
     messages.success(request, "Savol o'chirildi.")
     return redirect("dashboard:subtest_detail", subtest_id=subtest_id)
+
+
+# ============================ GURUH VAQT SOZLAMALARI ============================
+@dashboard_login_required
+def group_settings(request, group_id):
+    """Guruhning vaqt (taymer) sozlamalari: yoqish, 'vaqt yo'q', vaqtlar ro'yxati."""
+    group = get_object_or_404(TestGroup, id=group_id)
+
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+
+        if action == "save_flags":
+            group.timer_enabled = request.POST.get("timer_enabled") == "on"
+            group.timer_allow_none = request.POST.get("timer_allow_none") == "on"
+            group.save(update_fields=["timer_enabled", "timer_allow_none"])
+            messages.success(request, "Vaqt sozlamasi saqlandi.")
+
+        elif action == "add_time":
+            raw = request.POST.get("seconds", "").strip()
+            if not raw.isdigit() or not (1 <= int(raw) <= 3600):
+                messages.error(request, "1–3600 oralig'ida butun soniya kiriting.")
+            else:
+                value = int(raw)
+                options = [int(x) for x in (group.timer_options or []) if str(x).isdigit()]
+                if value in options:
+                    messages.error(request, f"{value} soniya allaqachon mavjud.")
+                else:
+                    options.append(value)
+                    group.timer_options = sorted(set(options))
+                    group.save(update_fields=["timer_options"])
+                    messages.success(request, f"{value} soniya qo'shildi.")
+
+        elif action == "remove_time":
+            raw = request.POST.get("value", "").strip()
+            if raw.isdigit():
+                options = [
+                    int(x) for x in (group.timer_options or [])
+                    if str(x).isdigit() and int(x) != int(raw)
+                ]
+                group.timer_options = sorted(set(options))
+                group.save(update_fields=["timer_options"])
+                messages.success(request, f"{raw} soniya o'chirildi.")
+
+        return redirect("dashboard:group_settings", group_id=group.id)
+
+    options = sorted(int(x) for x in (group.timer_options or []) if str(x).isdigit())
+    context = {"active": "groups", "group": group, "options": options}
+    return render(request, "dashboard/group_settings.html", context)

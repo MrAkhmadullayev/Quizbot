@@ -125,6 +125,26 @@ def get_group(group_id):
 
 
 @db_task
+def get_group_timer(group_id):
+    """Guruhning vaqt sozlamalari. Yoqilmagan/yo'q bo'lsa None (taymersiz)."""
+    group = TestGroup.objects.filter(id=group_id, is_active=True).first()
+    if not group or not group.timer_enabled:
+        return None
+    options = []
+    for value in group.timer_options or []:
+        try:
+            seconds = int(value)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= seconds <= 3600:
+            options.append(seconds)
+    options = sorted(set(options))
+    if not options and not group.timer_allow_none:
+        return None
+    return {"options": options, "allow_none": bool(group.timer_allow_none)}
+
+
+@db_task
 def list_group_tests(group_id):
     """Tanlangan guruhga biriktirilgan, ishlashga tayyor testlar."""
     return list(
@@ -214,7 +234,7 @@ def get_session_question(session_id, index):
 # ---------------- Sessiyalar ----------------
 @db_task
 @transaction.atomic
-def create_session(user_id, subtest_id, mode, chat_id=None):
+def create_session(user_id, subtest_id, mode, chat_id=None, time_limit=0):
     user = _registered_user(user_id)
     if not user:
         raise QuizOperationError("Avval telefon raqamingiz bilan ro'yxatdan o'ting.")
@@ -246,6 +266,12 @@ def create_session(user_id, subtest_id, mode, chat_id=None):
     if not question_ids:
         raise QuizOperationError("Bu qismda tayyor savollar yo'q.")
 
+    try:
+        time_limit = int(time_limit)
+    except (TypeError, ValueError):
+        time_limit = 0
+    time_limit = max(0, min(time_limit, 3600))
+
     return QuizSession.objects.create(
         user=user,
         subtest=subtest,
@@ -253,6 +279,7 @@ def create_session(user_id, subtest_id, mode, chat_id=None):
         chat_id=chat_id,
         total=len(question_ids),
         question_ids=question_ids,
+        time_limit=time_limit,
     )
 
 
@@ -331,6 +358,69 @@ def record_solo_answer(session_id, option_id, tg_id):
         "next_index": session.current_index,
         "score": session.score,
         "total": session.total,
+        "time_limit": session.time_limit,
+    }
+
+
+@db_task
+@transaction.atomic
+def skip_solo_question(session_id, tg_id, expected_index):
+    """Vaqt tugaganda joriy savolni javobsiz qoldirib, keyingisiga o'tadi.
+
+    Faqat ``expected_index`` hali joriy bo'lsa ishlaydi — agar bu orada
+    foydalanuvchi javob bergan bo'lsa (current_index o'zgargan), None qaytaradi.
+    Shu tarzda taymer va javob bir vaqtda kelganda ikki marta o'tib ketmaydi.
+    """
+    session = (
+        QuizSession.objects.select_for_update()
+        .select_related("user")
+        .filter(id=session_id)
+        .first()
+    )
+    if not session or session.mode != QuizSession.SOLO:
+        return None
+    if session.user.tg_id != tg_id:
+        return None
+    if session.status != QuizSession.ACTIVE:
+        return None
+    if session.current_index != expected_index:
+        return None  # allaqachon hal qilingan (javob berilgan)
+
+    data = _session_question(session, expected_index)
+    if not data:
+        return None
+    question = data["question"]
+    correct = next((opt for opt in data["options"] if opt.is_correct), None)
+
+    try:
+        Answer.objects.create(
+            session=session,
+            question=question,
+            selected=None,
+            is_correct=False,
+            user=session.user,
+        )
+    except IntegrityError:
+        pass  # javob allaqachon yozilgan bo'lsa — e'tiborsiz
+
+    session.current_index += 1
+    finished = session.current_index >= session.total
+    update_fields = ["current_index"]
+    if finished:
+        session.status = QuizSession.FINISHED
+        session.finished_at = timezone.now()
+        update_fields.extend(["status", "finished_at"])
+    session.save(update_fields=update_fields)
+
+    return {
+        "question_index": expected_index,
+        "question_text": question.text,
+        "correct_text": correct.text if correct else "—",
+        "finished": finished,
+        "next_index": session.current_index,
+        "score": session.score,
+        "total": session.total,
+        "time_limit": session.time_limit,
     }
 
 

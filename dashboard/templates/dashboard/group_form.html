@@ -2,8 +2,16 @@
 {% block title %}{% if group %}Guruhni tahrirlash{% else %}Yangi guruh{% endif %}{% endblock %}
 {% block page_title %}{% if group %}Guruhni tahrirlash{% else %}Yangi guruh{% endif %}{% endblock %}
 {% block content %}
-<h2 class="page-title">{% if group %}{{ group.name }}{% else %}Yangi guruh{% endif %}</h2>
-<p class="page-sub">Guruh nomini kiriting va unga tegishli testlarni belgilang.</p>
+<div class="toolbar">
+  <div>
+    <h2 class="page-title">{% if group %}{{ group.name }}{% else %}Yangi guruh{% endif %}</h2>
+    <p class="page-sub" style="margin:0">Guruh nomini kiriting va unga tegishli testlarni belgilang.</p>
+  </div>
+  <div class="spacer"></div>
+  {% if group %}
+    <a href="{% url 'dashboard:group_settings' group.id %}" class="btn">⚙️ Guruh sozlamalari</a>
+  {% endif %}
+</div>
 
 <form method="post" style="max-width:720px">
   {% csrf_token %}
